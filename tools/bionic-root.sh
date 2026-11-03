@@ -67,4 +67,21 @@ while [ ${#queue[@]} -gt 0 ]; do
     fi
   done
 done
+# Android's init generates /linkerconfig/ld.config.txt at boot. Without it every
+# process prints a linker warning on stderr, which breaks anything that checks
+# stderr (e.g. Tcl's `exec` tests). Minimal, non-isolated config:
+mkdir -p "$ROOT/linkerconfig"
+cat > "$ROOT/linkerconfig/ld.config.txt" <<'LDCFG'
+dir.system = /system/bin/
+dir.tcl = /data/local/tcl/
+
+[system]
+namespace.default.search.paths = /system/lib64
+namespace.default.search.paths += /apex/com.android.runtime/lib64/bionic
+
+[tcl]
+namespace.default.search.paths = /data/local/tcl/lib
+namespace.default.search.paths += /system/lib64
+namespace.default.search.paths += /apex/com.android.runtime/lib64/bionic
+LDCFG
 log "Bionic root ready: $ROOT ($(du -sh "$ROOT" | cut -f1))"
