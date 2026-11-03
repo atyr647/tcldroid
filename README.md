@@ -2,7 +2,7 @@
 
 Goal: run ordinary Tcl/Tk applications (and package Starkits/Starpacks as installable APK/AABs) on Android using a **real native port** of Tcl and Tk — no PRoot, Termux, X11/SDL shim or replacement toolkit.
 
-The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Phase 0 (baseline & design), in progress.** See [`docs/status.md`](docs/status.md) for exactly what works today.
+The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Phase 0 done; Phase 1 (headless Tcl) validated on real Bionic for x86_64, not yet on a device.** See [`docs/status.md`](docs/status.md) for exactly what works today.
 
 ## Layout
 

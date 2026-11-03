@@ -7,3 +7,4 @@
 | `android-smoke.sh` | `adb` + device/emulator | Installs the APK, runs the self-test inside the real app, expects `TCLDROID_SMOKE: PASS`. **Never run.** |
 
 | `tcltest.sh android\|host` | root for `android` | Tcl's **own** test suite (`all.tcl`) with the `tcltest` executable, on the Android build under real Bionic or on the host (baseline). Compare the two; see docs/status.md for results and known environmental failures (`httpProxy` needs DNS, `exec-19.1` needs `/bin/sh`). |
+| `tcltest-perfile.sh host\|android` | as above | Runs every test file separately and records per-file totals (`build/perfile-<mode>.tsv`), to diff host vs Android. |
