@@ -1,0 +1,6 @@
+# ninja log v5
+105	137	1793715883875532214	/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/5e5s6c46/obj/arm64-v8a/libtcldroid.so	a04e3d38188fd551
+1	104	1793715883842087251	CMakeFiles/tcldroid.dir/tcldroid_jni.c.o	f48209d431cccd0a
+1	58	1793715991278084794	CMakeFiles/tcldroid.dir/tcldroid_jni.c.o	f48209d431cccd0a
+1	67	1793715991290084793	CMakeFiles/tcldroid.dir/tcldroid_core.c.o	a696cf5ec4ef4df5
+67	94	1793715991314348198	/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/5e5s6c46/obj/arm64-v8a/libtcldroid.so	af049facd25aa244

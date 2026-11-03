@@ -1,0 +1,1 @@
+/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/5e5s6c46/obj/x86_64

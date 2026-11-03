@@ -1,0 +1,3 @@
+/home/user/tcldroid/android-host/app/.cxx/Debug/5e5s6c46/x86_64/CMakeFiles/tcldroid.dir
+/home/user/tcldroid/android-host/app/.cxx/Debug/5e5s6c46/x86_64/CMakeFiles/edit_cache.dir
+/home/user/tcldroid/android-host/app/.cxx/Debug/5e5s6c46/x86_64/CMakeFiles/rebuild_cache.dir

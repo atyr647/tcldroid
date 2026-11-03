@@ -1,0 +1,14 @@
+[
+{
+  "directory": "/home/user/tcldroid/android-host/app/.cxx/Debug/5e5s6c46/x86_64",
+  "command": "/home/user/tcldroid/.cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=x86_64-none-linux-android26 --sysroot=/home/user/tcldroid/.cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dtcldroid_EXPORTS -I/home/user/tcldroid/build/install/android-x86_64/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -Wall -Wextra -o CMakeFiles/tcldroid.dir/tcldroid_jni.c.o -c /home/user/tcldroid/android-host/app/src/main/cpp/tcldroid_jni.c",
+  "file": "/home/user/tcldroid/android-host/app/src/main/cpp/tcldroid_jni.c",
+  "output": "CMakeFiles/tcldroid.dir/tcldroid_jni.c.o"
+},
+{
+  "directory": "/home/user/tcldroid/android-host/app/.cxx/Debug/5e5s6c46/x86_64",
+  "command": "/home/user/tcldroid/.cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=x86_64-none-linux-android26 --sysroot=/home/user/tcldroid/.cache/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dtcldroid_EXPORTS -I/home/user/tcldroid/build/install/android-x86_64/include -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -Wall -Wextra -o CMakeFiles/tcldroid.dir/tcldroid_core.c.o -c /home/user/tcldroid/android-host/app/src/main/cpp/tcldroid_core.c",
+  "file": "/home/user/tcldroid/android-host/app/src/main/cpp/tcldroid_core.c",
+  "output": "CMakeFiles/tcldroid.dir/tcldroid_core.c.o"
+}
+]

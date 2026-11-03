@@ -6,7 +6,7 @@ project(tcldroid C)
 # path in DT_NEEDED (libtcl9.0.so has no SONAME).
 set(TCL_PREFIX "${TCL_INSTALL_ROOT}/android-${ANDROID_ABI}")
 
-add_library(tcldroid SHARED tcldroid_jni.c)
+add_library(tcldroid SHARED tcldroid_jni.c tcldroid_core.c)
 target_include_directories(tcldroid PRIVATE "${TCL_PREFIX}/include")
 target_link_directories(tcldroid PRIVATE "${TCL_PREFIX}/lib")
 target_link_libraries(tcldroid PRIVATE tcl9.0 log)
