@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Inputs supplied by tools/build-android-host.sh (see there for the layout):
+//   -Ptcldroid.ndk=<NDK dir>          pinned NDK (upstream/versions.env)
+//   -Ptcldroid.jniLibs=<dir>          <abi>/libtcl9.0.so staged from the Tcl build
+//   -Ptcldroid.tclRoot=<dir>          build/install (android-<abi>/{include,lib})
+def ndkDir     = providers.gradleProperty('tcldroid.ndk').get()
+def jniLibsDir = providers.gradleProperty('tcldroid.jniLibs').get()
+def tclRoot    = providers.gradleProperty('tcldroid.tclRoot').get()
+
+android {
+    namespace 'dev.tcldroid.host'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    ndkPath ndkDir
+
+    defaultConfig {
+        applicationId 'dev.tcldroid.host'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        externalNativeBuild {
+            cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}" }
+        }
+    }
+
+    externalNativeBuild {
+        cmake { path 'src/main/cpp/CMakeLists.txt' }
+    }
+
+    sourceSets.main.jniLibs.srcDirs = [jniLibsDir]
+
+    packaging {
+        jniLibs {
+            // libtcl9.0.so carries Tcl's script library as a zip appended to the
+            // ELF file, and Tcl mounts it by opening the library's own path
+            // (found with dladdr). That needs (a) the library extracted to disk
+            // and (b) no stripping, which would discard the appended zip.
+            useLegacyPackaging = true
+            keepDebugSymbols += ['**/libtcl9.0.so']
+        }
+    }
+
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

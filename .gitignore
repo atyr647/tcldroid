@@ -11,3 +11,5 @@
 local.properties
 .gradle/
 .idea/
+/android-host/local.properties
+android-host/**/build/

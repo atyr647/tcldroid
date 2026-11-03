@@ -51,7 +51,7 @@ Android has one app surface per Activity, not a desktop of free windows.
 ## Storage
 
 - `//zipfs:/app` — read-only bundled application payload (mounted from the APK).
-- App-private writable directories (`filesDir`, `cacheDir`) are exposed through `tcl_platform`-style variables and an `android` Tcl package (Phase 3); `~` resolves to `filesDir`.
+- App-private writable directories: `HOME` is set to `filesDir` and `TMPDIR` to `cacheDir` before Tcl starts, so `file home` and `file tempdir`-style code work unmodified. (Tcl 9 no longer expands a leading `~` implicitly; scripts use `file home`.) A richer `android` Tcl package comes in Phase 3.
 - Shared storage and permissions are explicit opt-in APIs, never implicit.
 
 ## Extensions
