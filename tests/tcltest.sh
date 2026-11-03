@@ -27,7 +27,7 @@ android)
   ROOT="$BUILD_DIR/bionic-root"; INST="$BUILD_DIR/install/android-x86_64"
   B="$BUILD_DIR/android-x86_64/tcl"
   [ -f "$INST/lib/libtcl9.0.so" ] || "$TCLDROID_ROOT/tools/build-tcl-android.sh" x86_64
-  [ -x "$ROOT/system/bin/linker64" ] || "$TCLDROID_ROOT/tools/bionic-root.sh"
+  [ -e "$ROOT/apex/com.android.runtime/bin/linker64" ] || "$TCLDROID_ROOT/tools/bionic-root.sh"
   [ -x "$B/tcltest" ] || make -C "$B" tcltest >/dev/null
   umount_all() { for m in dev proc; do mountpoint -q "$ROOT/$m" && umount "$ROOT/$m"; done; return 0; }
   trap umount_all EXIT

@@ -13,7 +13,7 @@
 ROOT="$BUILD_DIR/bionic-root"
 INST="$BUILD_DIR/install/android-x86_64"
 [ -f "$INST/lib/libtcl9.0.so" ] || "$TCLDROID_ROOT/tools/build-tcl-android.sh" x86_64
-[ -x "$ROOT/system/bin/linker64" ] || "$TCLDROID_ROOT/tools/bionic-root.sh"
+[ -e "$ROOT/apex/com.android.runtime/bin/linker64" ] || "$TCLDROID_ROOT/tools/bionic-root.sh"
 
 umount_all() {
   for m in dev proc; do mountpoint -q "$ROOT/$m" && umount "$ROOT/$m"; done
@@ -26,6 +26,8 @@ mount --bind /dev "$ROOT/dev"
 TCL="$ROOT/data/local/tcl"
 rm -rf "$TCL"; mkdir -p "$TCL" "$ROOT/data/local/tmp/files" "$ROOT/data/local/tmp/cache"
 cp -a "$INST/bin" "$INST/lib" "$TCL/"
+# Extra files for the script, visible in the chroot as /data/local/tmp/files/<name>.
+[ -z "${BIONIC_FILES:-}" ] || cp $BIONIC_FILES "$ROOT/data/local/tmp/files/"
 SCRIPT="${1:-$TCLDROID_ROOT/android-host/app/src/main/assets/selftest.tcl}"
 cp "$SCRIPT" "$TCL/script.tcl"
 
