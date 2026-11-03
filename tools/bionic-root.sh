@@ -36,6 +36,10 @@ for d in bin lib64; do debugfs -R "rdump /$d $ROOT/apex/com.android.runtime" "$T
 for f in lib64/libz.so lib64/liblog.so bin/sh bin/toybox; do
   debugfs -R "dump /system/$f $ROOT/system/$f" "$SYS" 2>/dev/null
 done
+# Name resolution: Bionic reads /system/etc/hosts (maps localhost); without it
+# `socket localhost` fails with "No address associated with hostname".
+mkdir -p "$ROOT/system/etc"
+debugfs -R "dump /system/etc/hosts $ROOT/system/etc/hosts" "$SYS" 2>/dev/null
 chmod +x "$ROOT/system/bin/sh" "$ROOT/system/bin/toybox"
 for a in cat cp date dirname echo env expr false grep head id kill ln ls mkdir mktemp mv printf pwd rm rmdir sed sleep sort stat tail tee test touch tr true uname wc which xargs chmod chown cut basename readlink diff cmp od hostname; do
   ln -sf toybox "$ROOT/system/bin/$a"
