@@ -1,0 +1,13 @@
+# Downloaded/extracted upstream sources, toolchains and build output.
+/.cache/
+/build/
+/out/
+
+# Android / Gradle
+*.apk
+*.aab
+*.keystore
+*.jks
+local.properties
+.gradle/
+.idea/

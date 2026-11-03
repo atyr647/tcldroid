@@ -1,0 +1,100 @@
+NATIVE TCL/TK + STARPACK FOR ANDROID
+High-Level Development Roadmap
+Version 0.1 — November 2026
+
+VISION
+Make Android a first-class, native Tcl/Tk target. Existing Tcl/Tk source and Starkit application payloads should run with minimal or no source changes, and developers should be able to package them as installable Android applications.
+
+NON-NEGOTIABLE PRINCIPLES
+- Port Tcl and Tk themselves; do not emulate X11, Linux, or desktop operating systems.
+- No PRoot, Termux, SDL/X11 compatibility shim, or replacement widget toolkit.
+- Preserve upstream Tcl/Tk commands, widget implementations, geometry managers, bindings, and semantics wherever Android permits.
+- Use Android's actual platform APIs for surfaces, graphics, input, text, accessibility, lifecycle, and storage.
+- Keep headless Tcl independent of graphical Tk.
+- Keep the port modular and suitable for eventual upstream contribution.
+
+TARGET ARCHITECTURE
+1. Native Tcl core compiled for Android/Bionic via NDK.
+2. Native Android platform implementation for Tk, sharing upstream Tk widget logic.
+3. Android Activity host and small JNI/platform bridge where required.
+4. Native Tclkit/Starkit runtime with Tcl VFS and embedded application assets.
+5. Starpack payload extraction/repackaging into APK/AAB; no desktop executable emulation.
+6. Optional Android-native Tcl packages for platform-specific capabilities.
+
+PHASE 0 — BASELINE, LICENSING, AND DESIGN
+- Audit upstream Tcl/Tk platform abstraction points, Tclkit, SDX, TclVFS, ZIP VFS, Metakit, and AndroWish for reusable code and lessons.
+- Choose pinned Tcl/Tk baseline, minimum Android API, CPU ABIs, build system, and test devices.
+- Define compatibility policy for Tk window-manager features that have no direct Android equivalent.
+- Verify licenses and upstream contribution requirements.
+Deliverable: architecture decision record, dependency inventory, compatibility matrix, reproducible build skeleton.
+
+PHASE 1 — FIRST-CLASS HEADLESS TCL
+- Cross-compile upstream Tcl with Android NDK/Bionic.
+- Implement/test filesystem paths, Unicode, clocks, sockets, threading, dynamic loading, signals where applicable, and Android app-private storage.
+- Integrate Tcl event notifier with Android runtime requirements.
+- Run Tcl's core test suite on Android devices and CI emulators.
+Deliverable: native Android Tcl interpreter and passing core regression baseline.
+
+PHASE 2 — NATIVE TK PLATFORM BACKEND
+- Add an Android platform backend to Tk, reusing its existing widget code and public commands.
+- Implement native window/surface ownership and rendering integration without X11 or SDL emulation.
+- Implement font measurement/rasterization, text shaping, color, clipping, images, and drawing primitives.
+- Connect Android Looper, Tcl notifier, Tk timers, redraws, and event dispatch.
+- Implement touch, pointer, keyboard, IME, focus, clipboard, and resize/orientation handling.
+- Define native behavior for Tk toplevels, dialogs, menus, and window-manager commands.
+Deliverable: ordinary Tcl/Tk scripts display functional widgets in a native Android Activity.
+
+PHASE 3 — ANDROID LIFECYCLE AND PLATFORM QUALITY
+- Handle Activity recreation, pause/resume, backgrounding, display density, system insets, and app termination.
+- Support accessibility, international text entry, selection, scrolling, and Android back navigation.
+- Add native file picking, share intents, permissions, and persistent storage through optional Tcl APIs.
+- Test phones, tablets, landscape, external keyboards, and multiple Android versions.
+Deliverable: stable, usable native Tk application host.
+
+PHASE 4 — TCLKIT AND STARKIT RUNTIME
+- Port Tclkit bootstrap and embedded virtual filesystem support to Android.
+- Support standard Starkit payload layouts, package discovery, Tcl initialization, and read-only bundled assets.
+- Provide writable application data locations separate from packaged assets.
+- Rebuild native C extensions for supported Android ABIs; preserve pure Tcl packages unchanged.
+Deliverable: existing compatible Starkit application payloads launch through native Android Tcl/Tk.
+
+PHASE 5 — STARPACK-TO-ANDROID PACKAGING
+- Build a deterministic packager that accepts Starkits and supported Starpacks, identifies their application payloads, and bundles them with the Android runtime.
+- Generate APK/AAB, manifest, icons, application identity, ABI libraries, and signing configuration.
+- Integrate with SDX-style workflows where practical.
+- Document limitations: Windows/macOS/Linux executable stubs cannot run unchanged on Android; native extensions require Android builds.
+Deliverable: one-command packaging of compatible Tcl/Tk applications as Android apps.
+
+PHASE 6 — COMPATIBILITY, PERFORMANCE, AND UPSTREAMING
+- Run Tcl and Tk regression suites and test representative third-party Starkits/Starpacks.
+- Track each widget, command, window-manager operation, package, and extension in a compatibility matrix.
+- Profile startup, memory footprint, text layout, touch latency, rendering, and battery use.
+- Split changes into reviewable upstream Tcl/Tk patches and maintain a small Android-specific host/packager.
+Deliverable: documented compatibility release and upstream-ready patch series.
+
+MILESTONES / RELEASE GATES
+M0: Reproducible Android builds and test harness.
+M1: Native headless Tcl executes scripts and passes core tests.
+M2: Native Tk displays a button, entry, text widget, and canvas using real Android platform integration.
+M3: Keyboard/IME, touch, clipboard, focus, and lifecycle work reliably.
+M4: Existing compatible Starkit payload runs without application-source edits.
+M5: Packager emits installable, signed APK and AAB.
+M6: Broad compatibility suite, performance targets, and upstream submissions.
+
+RECOMMENDED MONOREPO
+  tclandroid/
+    upstream/       Pinned Tcl/Tk and packaging source references
+    runtime/        Android Tcl and Tclkit integration
+    tk-android/     Native Tk platform implementation
+    android-host/   Activity, JNI/NDK bridge, platform services
+    packager/       Starkit/Starpack to APK/AAB
+    extensions/     Android builds for native Tcl packages
+    tests/          Tcl/Tk regression and device integration tests
+    examples/       Unmodified Tcl/Tk demonstration applications
+    docs/           Architecture, compatibility, build instructions
+
+FIRST PROTOTYPE
+Compile upstream Tcl for Android, then create the smallest Android Activity capable of hosting a real Tk widget through a new native Tk platform implementation. Prove button rendering, command callbacks, input, and event-loop integration before attempting full Starpack packaging.
+
+DEFINITION OF SUCCESS
+An existing Tcl/Tk application can be packaged and installed on Android, retains standard Tcl/Tk source and behavior wherever Android semantics permit, uses a genuine native Android Tk backend, and requires no X11/Linux emulation or external runtime installation.
