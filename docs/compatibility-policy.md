@@ -24,6 +24,14 @@ Unmodified scripts must *run*; the platform makes them *usable* by default, with
 
 ## Things Android forbids or changes
 
+Observed on Bionic (Android 14 libc) with Tcl's own test suite (see docs/status.md):
+
+- **`encoding system` is always `utf-8`.** Bionic supports only UTF-8 locales, so `LANG`/`LC_ALL` set to a legacy encoding (e.g. `japanese`) are ignored. (Tcl test `unixInit-3.2` expects `euc-jp`/`shiftjis` and fails by design on Android.)
+- **No `/bin/sh`**, only `/system/bin/sh` (toybox). Scripts hard-coding `/bin/sh` in `exec` fail (Tcl test `exec-19.1`).
+- **No ICU for apps.** Tcl's optional ICU integration (`icu.test`, 58 tests) is skipped: the platform ICU is not available to app processes. Treat ICU-backed features as **Unsupported** unless a bundled ICU is added.
+- **Native libraries must declare every dependency** (`DT_NEEDED`), including `libm`. Bionic does not let a `load`ed library borrow symbols from the host executable's libraries; glibc does. Package builds therefore pass `-lm` (found when `package require sqlite3` failed with `cannot locate symbol "trunc"`).
+- **`localhost`** resolves through `/system/etc/hosts` on Bionic. (Real DNS behaviour inside an app was not tested: my chroot has no resolver, so the 12 `httpProxy` tests that fetch `www.google.com` cannot run there.)
+
 - **Executables:** since Android 10 an app cannot execute files from its writable storage. Binary Tcl extensions load only from the APK's native-library directory, so they must be bundled at packaging time; there is no on-device binary package install. `exec` and `open |cmd` can run only system binaries that exist and are permitted (e.g. `/system/bin/sh`); do not rely on them.
 - **Process death:** Android may kill the process at any time. The Tcl interpreter lives in a process-level singleton, not in the Activity, so rotation/recreation does not restart the script. Scripts that need to survive process death handle `<<AndroidSaveState>>` and restore on start; nothing else is persisted for them.
 - **Multi-window/desktop mode:** supported as resizing of the single surface (per-Activity); true multi-OS-window Tk toplevels are not planned.
