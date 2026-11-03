@@ -2,3 +2,5 @@
 12	286	1793735063621246385	CMakeFiles/tcldroid.dir/tcldroid_core.c.o	bb142530f1721d4
 8	301	1793735063633246385	CMakeFiles/tcldroid.dir/tcldroid_jni.c.o	e43abac512b3a2e0
 302	334	1793735063665246384	/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/3kz1n735/obj/arm64-v8a/libtcldroid.so	74b4235c2f95a933
+13	1762	1793742224553871550	CMakeFiles/tcldroid.dir/tcldroid_jni.c.o	e43abac512b3a2e0
+1762	1838	1793742224753871545	/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/3kz1n735/obj/arm64-v8a/libtcldroid.so	74b4235c2f95a933

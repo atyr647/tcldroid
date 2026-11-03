@@ -24,6 +24,13 @@
 #include "tcldroid_core.h"
 #include "tkAndroid.h"
 
+/* Android's JNIEnv** versus the JDK's void** (the host JVM test builds the same source). */
+#ifdef TCLDROID_HOST_JVM
+#define ATTACH_ENV(p) ((void **) (p))
+#else
+#define ATTACH_ENV(p) (p)
+#endif
+
 #define TAG "tcldroid"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
@@ -303,7 +310,7 @@ TclThread(void *arg)
     int resultLen = 0, ok;
     jbyteArray a;
 
-    (*gVm)->AttachCurrentThread(gVm, &env, NULL);
+    (*gVm)->AttachCurrentThread(gVm, ATTACH_ENV(&env), NULL);
     job->env = env;
 
     cfg.libDir = job->libDir;

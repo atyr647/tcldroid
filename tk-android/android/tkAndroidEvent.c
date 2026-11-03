@@ -26,7 +26,7 @@ typedef struct Rec {
 static Rec queue[QSIZE];
 static int qHead, qTail;
 static pthread_mutex_t qLock = PTHREAD_MUTEX_INITIALIZER;
-static int sourceCreated, presentScheduled;
+static int sourceCreated, presentScheduled, draining;
 
 static void
 Push(Rec r)
@@ -374,23 +374,37 @@ CheckProc(void *cd, int flags)
 	    break;
 	}
     }
-    if (tkA.dirty && !presentScheduled && tkAHost.present != NULL) {
+    if (tkA.dirty && !presentScheduled && !draining && tkAHost.present != NULL) {
 	presentScheduled = 1;
 	Tcl_DoWhenIdle(PresentIdle, NULL);
     }
 }
 
-/* Push whatever changed since the last frame to the host. */
+/*
+ * Push whatever changed since the last frame to the host.
+ *
+ * Tk redraws widgets from idle handlers that are queued while it processes the
+ * Expose events we generate, i.e. *after* the idle handler that brought us here.
+ * Presenting immediately would show a frame with backgrounds but no widget content
+ * (a visible flash of an empty UI). So first drain pending window events and idle
+ * work (nothing else: no timers), then present the finished frame.
+ */
 static void
 PresentIdle(void *cd)
 {
-    TkARect r = tkA.dirtyRect;
+    TkARect r;
 
     (void) cd;
     presentScheduled = 0;
-    if (!tkA.dirty) {
+    if (!tkA.dirty || draining) {
 	return;
     }
+    draining = 1;
+    while (Tcl_DoOneEvent(TCL_WINDOW_EVENTS | TCL_IDLE_EVENTS | TCL_DONT_WAIT)) {
+	/* keep going until Tk has nothing left to draw */
+    }
+    draining = 0;
+    r = tkA.dirtyRect;
     tkA.dirty = 0;
     if (r.x1 < 0) r.x1 = 0;
     if (r.y1 < 0) r.y1 = 0;
@@ -494,7 +508,9 @@ KeyCode XKeysymToKeycode(Display *d, KeySym k) { (void) d; return (KeyCode) k; }
 XModifierKeymap *
 XGetModifierMapping(Display *d)
 {
-    XModifierKeymap *m = (XModifierKeymap *) calloc(1, sizeof(XModifierKeymap));
+    XModifierKeymap *m = (XModifierKeymap *) ckalloc(sizeof(XModifierKeymap));
+
+    memset(m, 0, sizeof(*m));
 
     (void) d;
     m->max_keypermod = 0;
@@ -502,7 +518,7 @@ XGetModifierMapping(Display *d)
     return m;
 }
 
-int XFreeModifiermap(XModifierKeymap *m) { free(m); return 1; }
+int XFreeModifiermap(XModifierKeymap *m) { ckfree(m); return 1; }
 int XRefreshKeyboardMapping(XMappingEvent *e) { (void) e; return 1; }
 int XGrabKeyboard(Display *d, Window w, Bool b, int p, int k, Time t) { (void) d; (void) w; (void) b; (void) p; (void) k; (void) t; return GrabSuccess; }
 int XUngrabKeyboard(Display *d, Time t) { (void) d; (void) t; return 1; }

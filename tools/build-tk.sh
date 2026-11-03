@@ -11,13 +11,15 @@ TK="$BUILD_DIR/src/tk$TK_VERSION"; TCLSRC="$BUILD_DIR/src/tcl$TCL_VERSION"
 # The overlay is under active development: always re-sync it.
 mkdir -p "$TK/android"; cp -a "$TCLDROID_ROOT/tk-android/android/." "$TK/android/"
 
-OUT="$BUILD_DIR/tk-$mode"; mkdir -p "$OUT/obj" "$OUT/gen"
+OUT="$BUILD_DIR/tk-$mode${SUFFIX:-}"; mkdir -p "$OUT/obj" "$OUT/gen"
 if [ "$mode" = host ]; then
   "$TCLDROID_ROOT/tools/build-host-tcl.sh" >/dev/null
   TCLINST="$BUILD_DIR/install/host"
   CC=gcc; LINKLIBS="-lfreetype -lm -lpthread"
   DEFS="-DTK_ANDROID_PORT -DTKA_TEST_FREETYPE $(pkg-config --cflags freetype2)"
   CFLAGS_EXTRA="-g -O1"
+  # SANITIZE=1 SUFFIX=-asan: AddressSanitizer build for hunting memory bugs.
+  [ -z "${SANITIZE:-}" ] || { CFLAGS_EXTRA="$CFLAGS_EXTRA -fsanitize=address -fno-omit-frame-pointer"; LINKLIBS="$LINKLIBS -fsanitize=address"; }
 else
   "$TCLDROID_ROOT/tools/fetch-ndk.sh" >/dev/null
   TCLINST="$BUILD_DIR/install/android-$mode"

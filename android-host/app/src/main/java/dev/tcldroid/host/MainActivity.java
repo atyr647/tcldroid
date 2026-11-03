@@ -1,6 +1,14 @@
 package dev.tcldroid.host;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.AlertDialog;
+import android.app.ApplicationExitInfo;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.graphics.Insets;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,7 +23,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Hosts Tcl/Tk. Runs assets/demo.tcl, which builds a Tk interface that draws into a
@@ -31,6 +42,7 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        installCrashRecorder();
         FrameLayout root = new FrameLayout(this);
         tkView = new TkView(this);
         tkView.setSizeListener(this);
@@ -54,6 +66,7 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         });
         setContentView(root);
         root.requestApplyInsets();
+        reportPreviousFailure();
     }
 
     @Override
@@ -89,7 +102,12 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     protected void onDestroy() {
         super.onDestroy();
         if (isFinishing()) {
-            // A Tcl interpreter cannot be restarted inside a live process.
+            // A Tcl interpreter cannot be restarted inside a live process. Leave a marker so the
+            // next launch knows this kill was deliberate and does not report it as a crash.
+            try {
+                new File(getFilesDir(), "clean_exit").createNewFile();
+            } catch (IOException ignored) {
+            }
             Process.killProcess(Process.myPid());
         }
     }
@@ -158,6 +176,107 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     @Override
     public void onCaret(int x, int y, int height) {
         tkView.showKeyboard();
+    }
+
+    // ---- crash reporting (so failures can be diagnosed without adb) ------------------------------
+
+    private void installCrashRecorder() {
+        final File file = new File(getFilesDir(), "last_exception.txt");
+        final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                try (FileOutputStream out = new FileOutputStream(file)) {
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    out.write(("thread " + t.getName() + "\n" + sw).getBytes(StandardCharsets.UTF_8));
+                } catch (IOException ignored) {
+                }
+                if (previous != null) {
+                    previous.uncaughtException(t, e);
+                }
+            }
+        });
+    }
+
+    /** Printable runs from a binary tombstone, enough to see the crash and the signal. */
+    private static String printable(InputStream in, int limit) throws IOException {
+        StringBuilder out = new StringBuilder(), run = new StringBuilder();
+        byte[] buf = new byte[4096];
+        for (int n; (n = in.read(buf)) > 0 && out.length() < limit; ) {
+            for (int i = 0; i < n; i++) {
+                char c = (char) (buf[i] & 0xFF);
+                if (c >= 32 && c < 127) {
+                    run.append(c);
+                } else {
+                    if (run.length() >= 6) out.append(run).append('\n');
+                    run.setLength(0);
+                }
+            }
+        }
+        return out.toString();
+    }
+
+    private void reportPreviousFailure() {
+        final StringBuilder sb = new StringBuilder();
+        File clean = new File(getFilesDir(), "clean_exit");
+        boolean deliberate = clean.exists();
+        clean.delete();
+
+        File ex = new File(getFilesDir(), "last_exception.txt");
+        if (ex.isFile()) {
+            try (InputStream in = new java.io.FileInputStream(ex)) {
+                ByteArrayOutputStream b = new ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                for (int n; (n = in.read(buf)) > 0; ) b.write(buf, 0, n);
+                sb.append("Uncaught Java exception on the last run:\n")
+                        .append(new String(b.toByteArray(), StandardCharsets.UTF_8)).append('\n');
+            } catch (IOException ignored) {
+            }
+            ex.delete();
+        }
+        if (Build.VERSION.SDK_INT >= 30 && !deliberate) {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            List<ApplicationExitInfo> list = am.getHistoricalProcessExitReasons(getPackageName(), 0, 1);
+            SharedPreferences prefs = getSharedPreferences("crash", MODE_PRIVATE);
+            if (!list.isEmpty() && list.get(0).getTimestamp() > prefs.getLong("shown", 0)) {
+                ApplicationExitInfo i = list.get(0);
+                int r = i.getReason();
+                if (r == ApplicationExitInfo.REASON_CRASH || r == ApplicationExitInfo.REASON_CRASH_NATIVE
+                        || r == ApplicationExitInfo.REASON_ANR || r == ApplicationExitInfo.REASON_SIGNALED
+                        || r == ApplicationExitInfo.REASON_INITIALIZATION_FAILURE
+                        || r == ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE) {
+                    sb.append("Android recorded the last run as reason ").append(r)
+                            .append(" (").append(i.getDescription()).append("), status ")
+                            .append(i.getStatus()).append('\n');
+                    try (InputStream t = i.getTraceInputStream()) {
+                        if (t != null) {
+                            sb.append("\ntrace:\n").append(printable(t, 3500));
+                        }
+                    } catch (IOException ignored) {
+                    }
+                }
+                prefs.edit().putLong("shown", i.getTimestamp()).apply();
+            }
+        }
+        if (sb.length() == 0) {
+            return;
+        }
+        final String report = "tcldroid " + BuildInfo.VERSION + " on " + Build.MODEL + ", Android "
+                + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n\n" + sb;
+        Log.e(TAG, report);
+        new AlertDialog.Builder(this)
+                .setTitle("The previous run ended abnormally")
+                .setMessage(report.length() > 6000 ? report.substring(0, 6000) : report)
+                .setPositiveButton("Copy", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(ClipData.newPlainText("tcldroid crash report", report));
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
     }
 
     // ---- assets --------------------------------------------------------------------------------

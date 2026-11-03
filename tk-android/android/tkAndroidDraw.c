@@ -687,9 +687,12 @@ SourceBuffer(Drawable src, uint32_t **pix, int *stride, int *w, int *h, int *ox,
     if (s->isWindow) {
 	*pix = tkA.root->pix;
 	*stride = tkA.root->w;
-	*w = s->w;
-	*h = s->h;
 	TkAWindowOrigin(s, ox, oy);
+	/* A window can be larger than the screen buffer for a moment (resize): never read past it. */
+	*w = s->w < tkA.root->w - *ox ? s->w : tkA.root->w - *ox;
+	*h = s->h < tkA.root->h - *oy ? s->h : tkA.root->h - *oy;
+	if (*w < 0) *w = 0;
+	if (*h < 0) *h = 0;
 	*depth = 24;
     } else {
 	*pix = s->pix;
@@ -882,9 +885,9 @@ static int
 ImgDestroy(XImage *im)
 {
     if (im->data != NULL) {
-	free(im->data);
+	ckfree(im->data);
     }
-    free(im);
+    ckfree(im);
     return 1;
 }
 
@@ -895,7 +898,8 @@ ImgSub(XImage *im, int x, int y, unsigned int w, unsigned int h)
 	    im->bitmap_pad, 0);
     unsigned int i, j;
 
-    sub->data = (char *) calloc(1, (size_t) sub->bytes_per_line * h + 1);
+    sub->data = (char *) ckalloc((size_t) sub->bytes_per_line * h + 1);
+    memset(sub->data, 0, (size_t) sub->bytes_per_line * h + 1);
     sub->byte_order = im->byte_order;
     sub->bitmap_bit_order = im->bitmap_bit_order;
     for (j = 0; j < h; j++) {
@@ -936,7 +940,9 @@ XCreateImage(Display *display, Visual *visual, unsigned int depth, int format,
 	int offset, char *data, unsigned int width, unsigned int height,
 	int pad, int bytesPerLine)
 {
-    XImage *im = (XImage *) calloc(1, sizeof(XImage));
+    XImage *im = (XImage *) ckalloc(sizeof(XImage));
+
+    memset(im, 0, sizeof(XImage));
 
     (void) display;
     im->width = (int) width;
@@ -1020,7 +1026,8 @@ XGetImage(Display *display, Drawable d, int x, int y, unsigned int w,
 	return NULL;
     }
     im = XCreateImage(display, DefaultVisual(display, 0), 24, ZPixmap, 0, NULL, w, h, 32, 0);
-    im->data = (char *) calloc(1, (size_t) im->bytes_per_line * h + 1);
+    im->data = (char *) ckalloc((size_t) im->bytes_per_line * h + 1);
+    memset(im->data, 0, (size_t) im->bytes_per_line * h + 1);
     for (j = 0; j < h; j++) {
 	for (i = 0; i < w; i++) {
 	    int px = x + (int) i, py = y + (int) j;

@@ -1,0 +1,44 @@
+package dev.tcldroid.host;
+import android.content.Context;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+/** Drives the REAL TclRuntime + tcldroid_jni.c on a host JVM (no Android): see tests/jvm-jni.sh. */
+public class Harness implements TclRuntime.Listener {
+    int[] frame; int fw, fh, frames; volatile boolean done; boolean ok;
+    public int[] allocFrame(int w, int h) { fw = w; fh = h; frame = new int[w * h]; System.err.println("[java] allocFrame " + w + "x" + h); return frame; }
+    public void onFrame(int x1, int y1, int x2, int y2) { frames++;
+        if (frames == 1) { try { ppm(System.getProperty("first.ppm", "/tmp/first.ppm")); } catch (IOException e) { throw new RuntimeException(e); } } if (frames <= 3) System.err.println("[java] onFrame " + x1 + "," + y1 + " " + x2 + "," + y2); }
+    public void onOutput(byte[] b) { System.err.print("[tcl] " + new String(b, StandardCharsets.UTF_8)); }
+    public void onDone(boolean ok, byte[] r) { this.ok = ok; done = true; System.err.println("[java] onDone ok=" + ok + " result=" + new String(r, StandardCharsets.UTF_8)); }
+    public void onTitle(byte[] t) { System.err.println("[java] title=" + new String(t, StandardCharsets.UTF_8)); }
+    public void onBack() { System.err.println("[java] onBack (unhandled)"); }
+    public void onMoveToBack() { }
+    public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }
+    void ppm(String path) throws IOException {
+        try (OutputStream o = new BufferedOutputStream(new FileOutputStream(path))) {
+            o.write(("P6\n" + fw + " " + fh + "\n255\n").getBytes());
+            for (int p : frame) { o.write((p >> 16) & 255); o.write((p >> 8) & 255); o.write(p & 255); }
+        }
+    }
+    public static void main(String[] a) throws Exception {
+        String lib = a[0], files = a[1], script = new String(Files.readAllBytes(Paths.get(a[2])), StandardCharsets.UTF_8), out = a[3];
+        Context.nativeLibDir = lib; Context.filesDir = files; Context.cacheDir = files;
+        Harness h = new Harness();
+        if (!TclRuntime.start(new Context(), script, h, 1080, 2200, 420)) throw new RuntimeException("start failed");
+        Thread.sleep(2500);
+        System.err.println("[java] frames so far: " + h.frames);
+        TclRuntime.touch(0, 540, 260); Thread.sleep(80); TclRuntime.touch(1, 540, 260);   // tap the first button
+        Thread.sleep(800);
+        TclRuntime.key(true, 0, 'h', 0); TclRuntime.key(false, 0, 'h', 0);
+        TclRuntime.resize(1080, 1500, 420);                                                 // keyboard-style shrink
+        Thread.sleep(1200);
+        TclRuntime.resize(1080, 2200, 420);
+        Thread.sleep(800);
+        h.ppm(out);
+        TclRuntime.back();
+        Thread.sleep(500);
+        System.err.println("[java] finished; frames=" + h.frames + " done=" + h.done);
+        System.exit(0);
+    }
+}

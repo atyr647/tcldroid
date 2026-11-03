@@ -286,7 +286,8 @@ int XGrabServer(Display *d) { (void) d; return 0; }
 int XUngrabServer(Display *d) { (void) d; return 0; }
 int XForceScreenSaver(Display *d, int mode) { (void) d; (void) mode; return 0; }
 int XBell(Display *d, int percent) { (void) d; (void) percent; return 0; }
-int XFree(void *data) { free(data); return 0; }
+/* Tk frees X-API results (XGetVisualInfo, XQueryTree, ...) with XFree: they are all ckalloc'd. */
+int XFree(void *data) { ckfree(data); return 0; }
 XHostAddress *XListHosts(Display *d, int *n, Bool *state) { (void) d; *n = 0; *state = False; return NULL; }
 int TkpCmapStressed(Tk_Window tkwin, Colormap cmap) { (void) tkwin; (void) cmap; return 0; }
 VisualID XVisualIDFromVisual(Visual *v) { return v ? v->visualid : 0; }

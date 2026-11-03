@@ -636,7 +636,7 @@ XQueryTree(Display *display, Window w, Window *root, Window *parent,
     for (c = d->first; c != NULL; c = c->next) count++;
     *root = TKA_ID(tkA.root);
     *parent = d->parent ? TKA_ID(d->parent) : None;
-    *children = count ? (Window *) malloc(count * sizeof(Window)) : NULL;
+    *children = count ? (Window *) ckalloc(count * sizeof(Window)) : NULL;   /* freed by Tk with XFree */
     for (c = d->first; c != NULL; c = c->next) (*children)[i++] = TKA_ID(c);
     *n = count;
     return 1;
