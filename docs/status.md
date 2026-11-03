@@ -5,7 +5,7 @@ Last updated: 2026-11-03
 | Milestone | State |
 | --- | --- |
 | M0 reproducible builds | **Done.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 (no source patches) for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. |
-| M1 headless Tcl on Android + core tests | **Reached for x86_64 on real Bionic; not yet on a device/emulator or arm64.** Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
+| M1 headless Tcl on Android + core tests | **Reached on real Bionic (x86_64 chroot, Tcl's full suite) and confirmed on one real arm64 phone (host app self-test, see below).** Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
 | M2–M6 | not started |
 
 ## What "on Bionic" means here
@@ -44,10 +44,14 @@ Extra skips on Android vs host (65): `icu` 58 (platform ICU not available, see p
 - `tests/host-embed.sh`: the JNI-free embedding core (`tcldroid_core.c`) runs the 22-check `selftest.tcl` on the host 22/22 with a relocated `libtcl9.0.so` and an empty environment. The same `selftest.tcl` also passes 22/22 on Bionic (`tests/bionic-chroot.sh`).
 - Bionic chooses `utf-8` as the system encoding with no `LANG`; the host forcing of UTF-8 is defensive only.
 
+## First run on a real device (user-reported screenshot, host app 0.1.0)
+Real arm64 Android phone (Android user `u0_a535`, TZ `America/New_York`): **21/22 self-test checks passed**. Confirmed in a real app: the app loads `libtcl9.0.so` and `libtcldroid.so`, the Tcl thread runs, JNI callbacks and stdout-to-screen work, Tcl mounts its embedded script library by itself (`zipfs-library`, `zipfs-init-tcl`, `zipfs-mounts`), `encoding system` is `utf-8`, Unicode filenames round-trip, bundled tzdata works with `TZ`, `zlib`, event loop, coroutines, and `exec /system/bin/sh` all work.
+The one failure, `socket-loopback: couldn't open socket: operation not permitted`, was **my omission**: Android refuses `socket()` (even to localhost) unless the manifest declares `android.permission.INTERNET`. Fixed in host app 0.1.1 (not yet re-run on the device). The packager (Phase 5) must therefore emit `INTERNET` by default for apps that use sockets.
+
 ## NOT verified
-- Anything on a real Android device or emulator: the app, JNI callbacks, the Tcl thread under the Android runtime, `dladdr` path inside the app's linker namespace, app sandbox/SELinux effects, real DNS and sockets from an app.
-- **arm64 has never been executed**, only built and inspected.
-- `tests/android-smoke.sh` and `.github/workflows/ci.yml` have never been run.
+- On the device: sockets after the INTERNET fix (0.1.1), real DNS, the other ABI (x86_64 app), other Android versions/devices, SELinux/OEM variations. One phone, one run.
+- arm64 Tcl's own test suite (only the self-test has run on arm64).
+- `tests/android-smoke.sh` (the adb automation) and `.github/workflows/ci.yml` have never been run; the self-test itself has now run once by hand on a device.
 - Tk: nothing exists yet.
 
 ## Next steps

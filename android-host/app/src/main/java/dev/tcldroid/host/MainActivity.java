@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
     }
 
     private void run() {
-        append("tcldroid host 0.1.0\n"
+        append("tcldroid host 0.1.1\n"
                 + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE
                 + " (API " + Build.VERSION.SDK_INT + "), ABIs " + java.util.Arrays.toString(Build.SUPPORTED_ABIS)
                 + "\n\n");
