@@ -29,7 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Hosts Tcl/Tk. Runs assets/demo.tcl, which builds a Tk interface that draws into a
+ * Hosts Tcl/Tk. Runs the app in assets/app/ (main.tcl), which builds a Tk interface that draws into a
  * {@link TkView}. The interpreter is process-lifetime state (Activity recreation on
  * rotation is avoided with configChanges in the manifest).
  */
@@ -79,15 +79,30 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         }
     }
 
+    /**
+     * The Tcl/Tk app is the contents of assets/app/ (main.tcl and anything it needs). It is
+     * copied to filesDir/app on every launch (so do NOT keep user data there: use $env(HOME),
+     * which is filesDir), then main.tcl runs with that directory current and on auto_path.
+     * Like wish, the app lives in the Tk event loop until "." is destroyed or [exit] is called.
+     */
     private void startTcl(int w, int h) {
-        String script;
+        File appDir = new File(getFilesDir(), "app");
         try {
             copyAsset("selftest.tcl");
-            script = new String(readAsset("demo.tcl"), StandardCharsets.UTF_8);
+            deleteRecursively(appDir);
+            copyAssetTree("app", appDir);
         } catch (IOException e) {
-            Log.e(TAG, "cannot read assets", e);
+            Log.e(TAG, "cannot unpack the app", e);
+            showReport("Cannot start", "Unpacking the app failed:\n" + e);
             return;
         }
+        String dir = appDir.getAbsolutePath();
+        String script = "namespace eval ::tkdroid {variable appdir {" + dir + "}}\n"
+                + "cd {" + dir + "}\n"
+                + "lappend ::auto_path {" + dir + "} {" + dir + "/lib}\n"
+                + "if {[catch {source main.tcl} err]} { return -code error $::errorInfo }\n"
+                + "catch {tkwait window .}\n"
+                + "exit\n";
         if (!TclRuntime.start(this, script, this, w, h, tkView.dpi())) {
             Log.e(TAG, "failed to start Tcl thread");
         }
@@ -123,11 +138,11 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     public void onDone(boolean ok, byte[] result) {
         Log.i(TAG, "script " + (ok ? "ended" : "ERROR") + ": " + new String(result, StandardCharsets.UTF_8));
         if (!ok) {
+            final String text = new String(result, StandardCharsets.UTF_8);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    android.widget.Toast.makeText(MainActivity.this,
-                            "Tcl error (see logcat: tcldroid)", android.widget.Toast.LENGTH_LONG).show();
+                    showReport("Tcl error", text);
                 }
             });
         }
@@ -271,17 +286,30 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         if (sb.length() == 0) {
             return;
         }
+        showReport("The previous run ended abnormally", sb.toString());
+    }
+
+    /** A dialog with selectable text and a Copy button; used for crash and Tcl error reports. */
+    private void showReport(String title, String body) {
         final String report = "tcldroid " + BuildInfo.VERSION + " on " + Build.MODEL + ", Android "
-                + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n\n" + sb;
+                + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n\n" + body;
         Log.e(TAG, report);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText(report.length() > 12000 ? report.substring(0, 12000) : report);
+        tv.setTextIsSelectable(true);
+        tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+        tv.setTextSize(12);
+        tv.setPadding(32, 16, 32, 16);
+        sv.addView(tv);
         new AlertDialog.Builder(this)
-                .setTitle("The previous run ended abnormally")
-                .setMessage(report.length() > 6000 ? report.substring(0, 6000) : report)
+                .setTitle(title)
+                .setView(sv)
                 .setPositiveButton("Copy", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                        cm.setPrimaryClip(ClipData.newPlainText("tcldroid crash report", report));
+                        cm.setPrimaryClip(ClipData.newPlainText("tcldroid report", report));
                     }
                 })
                 .setNegativeButton("Close", null)
@@ -298,6 +326,35 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
                 out.write(buf, 0, n);
             }
             return out.toByteArray();
+        }
+    }
+
+    private static void deleteRecursively(File f) {
+        File[] kids = f.listFiles();
+        if (kids != null) {
+            for (File k : kids) deleteRecursively(k);
+        }
+        f.delete();
+    }
+
+    /** Copies assets/<assetPath> (a file, or a directory tree) to dest. */
+    private void copyAssetTree(String assetPath, File dest) throws IOException {
+        String[] names = getAssets().list(assetPath);
+        if (names != null && names.length > 0) {
+            if (!dest.isDirectory() && !dest.mkdirs()) {
+                throw new IOException("cannot create " + dest);
+            }
+            for (String n : names) {
+                copyAssetTree(assetPath + "/" + n, new File(dest, n));
+            }
+        } else {
+            File parent = dest.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+                throw new IOException("cannot create " + parent);
+            }
+            try (FileOutputStream out = new FileOutputStream(dest)) {
+                out.write(readAsset(assetPath));
+            }
         }
     }
 

@@ -75,3 +75,7 @@ User report: a flash of an interface with no text, then the app closed. Root cau
 2. Optionally run the arm64 build under `qemu-user` with an arm64 system image for Bionic coverage on that ABI.
 3. Phase 2: implement the Tk platform layer in the order of the work list (start with the in-process 'server' families so a window and a `button` can be created without drawing; then regions, colours, fonts and drawing). The rendering/text spike (ADR 0002) needs timings from a real device to mean anything.
 4. CI on a KVM-capable runner.
+
+## App packaging (0.3.0)
+
+`tools/pack-app.sh` turns a folder with `main.tcl` into a separate APK (own id, name, icon, version); see [packaging.md](packaging.md). **Verified here:** both example APKs build for arm64-v8a and x86_64, `aapt2` shows the intended package/label/version, apksigner verifies, `examples/demo` and `examples/notes` run through the JVM+JNI harness (touch, keyboard show/hide, resize, Back; Notes writes `notes.txt` on Back). **Not verified:** installing and running either APK on a phone; two apps installed side by side.

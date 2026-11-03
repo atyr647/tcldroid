@@ -1,4 +1,4 @@
-# demo.tcl -- an ordinary Tcl/Tk script, run unmodified by the Android host.
+# main.tcl -- an ordinary Tcl/Tk script, run unmodified by the Android host.
 # Nothing here is Android-specific except reading ::tkdroid::screen for the info line.
 
 wm title . "Tk on Android"

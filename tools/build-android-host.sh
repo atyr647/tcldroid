@@ -2,6 +2,13 @@
 # Build the Android host app (debug APK) with the pinned NDK/SDK, packaging the
 # Tcl libraries built by tools/build-tcl-android.sh.
 #   usage: tools/build-android-host.sh [gradle task ...]     (default: assembleDebug)
+# The Tcl/Tk app inside the APK is data, chosen by environment variables
+# (tools/pack-app.sh is the friendly front end):
+#   APP_DIR      folder with main.tcl (+ files, optional icon.png)   default examples/demo
+#   APP_NAME     launcher label                                      default "Tcl Host"
+#   APP_ID       Android applicationId                               default dev.tcldroid.host
+#   APP_VERSION  versionName                                         default 0.3.0
+#   APP_CODE     versionCode                                         default 8
 . "$(dirname "$0")/env.sh"
 
 # Build Tcl only if a library is missing (set FORCE_TCL=1 to rebuild).
@@ -29,6 +36,21 @@ sdk.dir=$SDK
 cmake.dir=$(dirname "$(dirname "$(command -v cmake)")")
 PROPS
 
+# Stage the app: its files go to assets/app/, its icon to res/drawable/app_icon.png.
+APP_DIR=${APP_DIR:-$TCLDROID_ROOT/examples/demo}
+APP_NAME=${APP_NAME:-Tcl Host}
+APP_ID=${APP_ID:-dev.tcldroid.host}
+APP_VERSION=${APP_VERSION:-0.3.0}
+APP_CODE=${APP_CODE:-8}
+APP_DIR=$(cd "$APP_DIR" && pwd) || die "APP_DIR not found"
+[ -f "$APP_DIR/main.tcl" ] || die "$APP_DIR/main.tcl not found"
+STAGE="$BUILD_DIR/app-stage"
+rm -rf "$STAGE"; mkdir -p "$STAGE/assets/app" "$STAGE/res/drawable"
+cp -a "$APP_DIR/." "$STAGE/assets/app/"
+rm -rf "$STAGE/assets/app/.git"
+if [ -f "$APP_DIR/icon.png" ]; then cp "$APP_DIR/icon.png" "$STAGE/res/drawable/app_icon.png"
+else cp "$TCLDROID_ROOT/android-host/res-default/drawable/app_icon.png" "$STAGE/res/drawable/app_icon.png"; fi
+
 tasks=("$@"); [ ${#tasks[@]} -gt 0 ] || tasks=(assembleDebug)
 cd "$TCLDROID_ROOT/android-host"
 ./gradlew --no-daemon "${tasks[@]}" \
@@ -37,5 +59,17 @@ cd "$TCLDROID_ROOT/android-host"
   -Ptcldroid.jniLibs="$JNILIBS" \
   -Ptcldroid.tclRoot="$BUILD_DIR/install" \
   -Ptcldroid.tkRoot="$BUILD_DIR" \
-  -Ptcldroid.tkAndroid="$TCLDROID_ROOT/tk-android/android"
-log "APK: $TCLDROID_ROOT/android-host/app/build/outputs/apk/debug/app-debug.apk"
+  -Ptcldroid.tkAndroid="$TCLDROID_ROOT/tk-android/android" \
+  -Ptcldroid.appAssets="$STAGE/assets" \
+  -Ptcldroid.appRes="$STAGE/res" \
+  -Ptcldroid.appId="$APP_ID" \
+  -Ptcldroid.appName="$APP_NAME" \
+  -Ptcldroid.appVersion="$APP_VERSION" \
+  -Ptcldroid.appCode="$APP_CODE"
+APK="$TCLDROID_ROOT/android-host/app/build/outputs/apk/debug/app-debug.apk"
+mkdir -p "$TCLDROID_ROOT/out"
+safe=$(printf %s "$APP_NAME" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g;s/^-//;s/-$//')
+OUT="$TCLDROID_ROOT/out/${safe:-app}-$APP_VERSION.apk"
+[ ! -f "$APK" ] || cp "$APK" "$OUT"
+[ "$APP_ID" != dev.tcldroid.host ] || cp "$APK" "$TCLDROID_ROOT/out/tcldroid-host-debug.apk"
+log "APK: $OUT"

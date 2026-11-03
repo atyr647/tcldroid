@@ -19,6 +19,10 @@ The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Pha
 | [`examples/`](examples/) | Unmodified Tcl/Tk demo apps | 2+ |
 | [`docs/`](docs/) | ADRs, compatibility policy/matrix, dependency inventory | 0+ |
 
+## Package your own Tcl/Tk app
+
+`tools/pack-app.sh myapp-folder --name "My App"` produces an installable APK; see [docs/packaging.md](docs/packaging.md).
+
 ## Build (headless Tcl for Android — Milestone M0)
 
 Requirements on the build machine (Linux x86_64): `bash`, `curl`, `unzip`, `tar`, `make`, a native C compiler, `sha1sum`/`sha256sum`. Nothing else: the script downloads and verifies the pinned NDK.

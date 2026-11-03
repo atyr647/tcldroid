@@ -18,7 +18,7 @@ J="$TCLDROID_ROOT/android-host/app/src/main/java/dev/tcldroid/host"
     "$TCLDROID_ROOT"/tests/jvm/stubs/android/content/pm/ApplicationInfo.java \
     "$J/TclRuntime.java" "$TCLDROID_ROOT"/tests/jvm/src/dev/tcldroid/host/*.java 2>&1 | grep -v "^Note:" || true
 cp "$TCLDROID_ROOT/android-host/app/src/main/assets/selftest.tcl" "$W/files/assets/"
-SCRIPT="${1:-$TCLDROID_ROOT/android-host/app/src/main/assets/demo.tcl}"
+SCRIPT="${1:-$TCLDROID_ROOT/examples/demo/main.tcl}"
 cd "$W"
 LD_LIBRARY_PATH="$W/lib" TZ=UTC timeout 60 "$JH/bin/java" -Xcheck:jni -Dfirst.ppm="$W/first.ppm" -Djava.awt.headless=true -Djava.library.path="$W/lib" \
     -cp classes dev.tcldroid.host.Harness "$W/lib" "$W/files" "$SCRIPT" "$W/frame.ppm"

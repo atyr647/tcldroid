@@ -9,12 +9,23 @@ plugins {
 //   -Ptcldroid.tclRoot=<dir>          build/install (android-<abi>/{include,lib})
 //   -Ptcldroid.tkRoot=<dir>           build/ (tk-<abi>/libtk9.0.so from tools/build-tk.sh)
 //   -Ptcldroid.tkAndroid=<dir>        tk-android/android (public header tkAndroid.h)
+//   -Ptcldroid.appAssets=<dir>        contains app/ : the Tcl/Tk app's files (main.tcl, ...)
+//   -Ptcldroid.appRes=<dir>           contains drawable/app_icon.png
+//   -Ptcldroid.appId / appName / appVersion / appCode   the app's identity
 def pinnedNdkDir = providers.gradleProperty('tcldroid.ndk').get()
 def pinnedNdkRev = providers.gradleProperty('tcldroid.ndkVersion').get()
 def jniLibsDir   = providers.gradleProperty('tcldroid.jniLibs').get()
 def tclRoot      = providers.gradleProperty('tcldroid.tclRoot').get()
 def tkRoot       = providers.gradleProperty('tcldroid.tkRoot').get()
 def tkAndroidDir = providers.gradleProperty('tcldroid.tkAndroid').get()
+def appAssets    = providers.gradleProperty('tcldroid.appAssets').get()
+def appRes       = providers.gradleProperty('tcldroid.appRes').get()
+def appId        = providers.gradleProperty('tcldroid.appId').get()
+def appName      = providers.gradleProperty('tcldroid.appName').get()
+def appVersion   = providers.gradleProperty('tcldroid.appVersion').get()
+def appCode      = providers.gradleProperty('tcldroid.appCode').get().toInteger()
+// A string resource: escape what aapt2 treats specially.
+def appNameXml   = appName.replace('&', '&amp;').replace('<', '&lt;').replace("'", "\\'").replace('"', '\\"')
 
 android {
     namespace 'dev.tcldroid.host'
@@ -24,11 +35,12 @@ android {
     ndkPath = pinnedNdkDir
 
     defaultConfig {
-        applicationId 'dev.tcldroid.host'
+        applicationId appId
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.2.4'
+        versionCode appCode
+        versionName appVersion
+        resValue 'string', 'app_name', appNameXml
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild {
             cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}", "-DTK_BUILD_ROOT=${tkRoot}", "-DTK_ANDROID_DIR=${tkAndroidDir}" }
@@ -40,6 +52,8 @@ android {
     }
 
     sourceSets.main.jniLibs.srcDirs = [jniLibsDir]
+    sourceSets.main.assets.srcDirs = ['src/main/assets', appAssets]
+    sourceSets.main.res.srcDirs = ['src/main/res', appRes]
 
     packaging {
         jniLibs {
