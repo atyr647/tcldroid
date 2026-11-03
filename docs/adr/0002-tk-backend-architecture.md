@@ -52,6 +52,10 @@ Default plan is **A with batching** (record draw ops in native code, replay in o
 - `android-host/` holds the Activity, `SurfaceView`, `InputConnection`, JNI glue and Gradle project.
 - Headless Tcl (`runtime/`) must build and test without any Tk or Java code.
 
+## Rendering decision, settled by measurement (2026-11-03)
+
+The spike this ADR asked for is answered by what was built: **a C rasteriser draws every X-shaped call into one pixel buffer; the platform supplies only text (android.graphics.Paint through JNI) and presents changed rectangles by copying them into a Bitmap.** This is neither plan A (Canvas per draw call) nor plan B (FreeType) but a hybrid chosen because it needed the least code and could be tested off-device. Measured on a real phone (1440x2791, 600 dpi), whole pipeline per frame: canvas moves 0.6 ms, scrolling a full-width text widget 6.3 ms, a sliding scale 0.8 ms. That is comfortably inside a 60 fps budget, so **no further rendering work is justified until a slower device shows otherwise.** Known limits kept for later: no anti-aliasing of shapes (Tk's classic look), rotated text is drawn unrotated, text shaping is per-character advances plus whole-run rendering (no kerning-aware measuring), and measurements come from one high-end device.
+
 ## Decisions from the first compile survey (2026-11-03)
 
 Compiling Tk's platform-independent code for Android (`tools/survey-tk-android.sh`; results in [tk-android-work-list.md](../tk-android-work-list.md)) forced three concrete choices. All 119 files in the compile set build with zero failures; **195 platform functions** remain to be implemented, in 12 families.

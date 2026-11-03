@@ -45,14 +45,27 @@ text .log -height 5 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
 .log insert end "Self-test output appears here.\n"
 
 # Run assets/selftest.tcl, showing its output in the text widget above.
+# Only writes to stdout/stderr are captured; `puts $file ...` must still reach the file.
 proc runSelftest {} {
     global env
     .log delete 1.0 end
     rename ::puts ::tcl_puts
     proc ::puts args {
-        .log insert end "[lindex $args end]\n"
-        .log see end
-        update idletasks
+        set a $args
+        set nl "\n"
+        if {[lindex $a 0] eq "-nonewline"} { set nl ""; set a [lrange $a 1 end] }
+        switch -- [llength $a] {
+            1 { set ch stdout; set text [lindex $a 0] }
+            2 { lassign $a ch text }
+            default { return -code error "wrong # args: should be \"puts ?-nonewline? ?channelId? string\"" }
+        }
+        if {$ch eq "stdout" || $ch eq "stderr"} {
+            .log insert end $text$nl
+            .log see end
+            update idletasks
+        } else {
+            tcl_puts {*}$args
+        }
     }
     set code [catch {uplevel #0 [list source [file join $env(HOME) assets selftest.tcl]]} err]
     rename ::puts {}
@@ -60,6 +73,29 @@ proc runSelftest {} {
     if {$code} { .log insert end "error: $err\n" }
     .log see end
 }
+
+# Touch scrolling: dragging a finger over a text widget scrolls it (instead of selecting
+# text, which is the mouse behaviour). An example of the kind of helper Android needs.
+namespace eval ::touchscroll {
+    variable y0
+    proc enable {w} {
+        bind $w <ButtonPress-1> [list ::touchscroll::down $w %y]
+        bind $w <B1-Motion>     [list ::touchscroll::move $w %y]
+    }
+    proc down {w y} { variable y0; set y0($w) $y; return -code break }
+    proc move {w y} {
+        variable y0
+        set lh [font metrics [$w cget -font] -linespace]
+        set n [expr {int(($y0($w) - $y) / $lh)}]
+        if {$n != 0} {
+            $w yview scroll $n units
+            set y0($w) [expr {$y0($w) - $n * $lh}]
+        }
+        return -code break
+    }
+}
+touchscroll::enable .log
+
 # Measure how fast the pipeline redraws on this device (results go to the text box).
 proc benchmark {} {
     .log delete 1.0 end
@@ -70,24 +106,24 @@ proc benchmark {} {
     set t0 [clock milliseconds]
     for {set i 0} {$i < 60} {incr i} { .cv move drag 4 0; update }
     set ms [expr {([clock milliseconds] - $t0) / 60.0}]
-    lappend results [format "canvas: move 2 shapes   %6.1f ms/frame" $ms] [format "  draw %.1f  present %.1f  (avg ms, area %d px)" \
-        [dict get [tkdroid::stats] draw_avg] [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
+    lappend results [format "canvas: move 2 shapes  %6.1f ms/frame" $ms] [format "  (copy to Android %.1f ms, %d px)" \
+        [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
     for {set i 0} {$i < 60} {incr i} { .cv move drag -4 0; update }
     tkdroid::stats reset
     .log delete 1.0 end
     set t0 [clock milliseconds]
     for {set i 0} {$i < 40} {incr i} { .log insert end "line $i of scrolling text in a text widget\n"; .log see end; update }
     set ms [expr {([clock milliseconds] - $t0) / 40.0}]
-    lappend results [format "text: append + scroll  %6.1f ms/frame" $ms] [format "  draw %.1f  present %.1f  (avg ms, area %d px)" \
-        [dict get [tkdroid::stats] draw_avg] [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
+    lappend results [format "text: append+scroll    %6.1f ms/frame" $ms] [format "  (copy to Android %.1f ms, %d px)" \
+        [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
     tkdroid::stats reset
     set t0 [clock milliseconds]
     for {set i 0} {$i < 20} {incr i} { .s set [expr {$i * 5}]; update }
     set ms [expr {([clock milliseconds] - $t0) / 20.0}]
-    lappend results [format "scale: slide           %6.1f ms/frame" $ms]
+    lappend results [format "scale: slide          %6.1f ms/frame" $ms]
     .log delete 1.0 end
     foreach r $results { .log insert end "$r\n" }
-    .log insert end "frame = Tk redraw + raster ('draw') then copy to Android ('present')\n"
+    .log insert end "ms/frame = everything: Tk redraw + rasteriser + copy to Android\n"
 }
 frame .btns -background #eceff1
 button .btns.bm   -text "Benchmark" -command benchmark   -pady 10
