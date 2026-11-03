@@ -5,7 +5,7 @@ Last updated: 2026-11-03
 | Milestone | State |
 | --- | --- |
 | M0 reproducible builds | **Done.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 (no source patches) for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. |
-| M1 headless Tcl on Android + core tests | **Reached on real Bionic (x86_64 chroot, Tcl's full suite) and confirmed on one real arm64 phone (host app self-test, see below).** Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
+| M1 headless Tcl on Android + core tests | **Reached.** Tcl's full suite on real Bionic (x86_64 chroot) and the host app self-test **22/22 on a real arm64 phone**. Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
 | M2–M6 | not started |
 
 ## What "on Bionic" means here
@@ -46,16 +46,16 @@ Extra skips on Android vs host (65): `icu` 58 (platform ICU not available, see p
 
 ## First run on a real device (user-reported screenshot, host app 0.1.0)
 Real arm64 Android phone (Android user `u0_a535`, TZ `America/New_York`): **21/22 self-test checks passed**. Confirmed in a real app: the app loads `libtcl9.0.so` and `libtcldroid.so`, the Tcl thread runs, JNI callbacks and stdout-to-screen work, Tcl mounts its embedded script library by itself (`zipfs-library`, `zipfs-init-tcl`, `zipfs-mounts`), `encoding system` is `utf-8`, Unicode filenames round-trip, bundled tzdata works with `TZ`, `zlib`, event loop, coroutines, and `exec /system/bin/sh` all work.
-The one failure, `socket-loopback: couldn't open socket: operation not permitted`, was **my omission**: Android refuses `socket()` (even to localhost) unless the manifest declares `android.permission.INTERNET`. Fixed in host app 0.1.1 (not yet re-run on the device). The packager (Phase 5) must therefore emit `INTERNET` by default for apps that use sockets.
+The one failure, `socket-loopback: couldn't open socket: operation not permitted`, was **my omission**: Android refuses `socket()` (even to localhost) unless the manifest declares `android.permission.INTERNET`. Fixed in host app 0.1.1. **Re-run on the same phone (user-reported screenshot): `TCLDROID_SMOKE: PASS 22/22`**, including `socket-loopback`. The packager (Phase 5) must therefore emit `INTERNET` by default for apps that use sockets.
 
 ## NOT verified
-- On the device: sockets after the INTERNET fix (0.1.1), real DNS, the other ABI (x86_64 app), other Android versions/devices, SELinux/OEM variations. One phone, one run.
+- On the device: real DNS and non-loopback networking, the x86_64 app, other Android versions/devices, SELinux/OEM variations. One phone (arm64), one run each of 0.1.0 and 0.1.1; the phone model/Android version are not recorded because the screenshots were scrolled past the device-info header.
 - arm64 Tcl's own test suite (only the self-test has run on arm64).
 - `tests/android-smoke.sh` (the adb automation) and `.github/workflows/ci.yml` have never been run; the self-test itself has now run once by hand on a device.
 - Tk: nothing exists yet.
 
 ## Next steps
-1. Run `tests/android-smoke.sh` on a KVM-accelerated emulator or a real device (JNI/Activity layer). Any machine with the Android SDK + emulator + KVM: `tools/build-android-host.sh && tests/android-smoke.sh`.
+1. (Optional) Automate the on-device run: `tests/android-smoke.sh` on a KVM-accelerated emulator or an attached phone (`tools/build-android-host.sh && tests/android-smoke.sh`). The manual run already passed.
 2. Optionally run the arm64 build under `qemu-user` with an arm64 system image for Bionic coverage on that ABI.
 3. Phase 2: Tk backend (ADR 0002). The rendering/text spike needs timings from a real device or accelerated emulator to mean anything.
 4. CI on a KVM-capable runner.
