@@ -5,7 +5,7 @@ Last updated: 2026-11-03
 | Milestone | State |
 | --- | --- |
 | M0 reproducible builds | **Done for build, not for run.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. Zero patches to upstream. |
-| M1 headless Tcl on Android + core tests | **Not reached.** Nothing has ever executed on Android: this container has no KVM/emulator. The self-test and smoke runner exist (below) but the Android half is unrun. |
+| M1 headless Tcl on Android + core tests | **Partly reached.** The Android x86_64 `tclsh` runs and passes our 22-check self-test on **real Bionic** (see below). Tcl's own test suite has not been run yet; nothing has run on a real Android device/emulator or arm64. |
 | M2–M6 | not started |
 
 ## Verified (by inspection or by running on the build machine)
@@ -17,10 +17,14 @@ Last updated: 2026-11-03
   - No compiler warnings with `-Wall -Wextra` in the glue.
 - **Embedding logic, on the build machine** (`tests/host-embed.sh`): the JNI-free core (`tcldroid_core.c`) drives the 22-check `selftest.tcl` against a host Tcl with `libtcl9.0.so` loaded from a relocated directory, an empty environment (no `LANG`, no `TCL_LIBRARY`) and stdout/stderr redirected through the custom channels: **22/22 pass**. This covers app-hook zipfs mount, `init.tcl` from zipfs, UTF-8 forcing, bundled tzdata, sockets, event loop.
 
-## NOT verified (needs an emulator or device)
-- Anything on Bionic or Android: library loading, JNI callbacks, the thread, whether `dladdr` yields a mountable path inside the app, Bionic's locale behaviour, `zlib` from `/system`, `exec`, sockets under the app sandbox.
+- **Android build on real Bionic** (`tests/bionic-chroot.sh`): the Android x86_64 `tclsh9.0` + `libtcl9.0.so` run under Android 14's own `linker64`/`libc`/`libm`/`libdl`/`libz` (extracted from the pinned system image, in a chroot, empty environment): **22/22 pass**, including zipfs library mount, Unicode filenames, bundled tzdata, loopback sockets, event loop, `zlib` (system libz), and `exec /system/bin/sh`. Bionic reports UTF-8 by itself, so Tcl chooses `utf-8` with no `LANG`.
+- Booting the emulator **without KVM does not work**: Android 14 under pure software emulation never completed boot in ~90 minutes (system_server watchdog restart loop). `tools/run-emulator.sh` needs KVM (or a much lighter image) to be useful.
+
+## NOT verified
+- JNI, the Java Activity, the Tcl thread under Android's app runtime, `dladdr` path inside the app's linker namespace, arm64 execution (only x86_64 was run), Tk.
+- On a real device/emulator: library loading by the app, JNI callbacks, the thread, whether `dladdr` yields a mountable path inside the app, sockets under the app sandbox, SELinux/seccomp effects.
 - `tests/android-smoke.sh` and `.github/workflows/ci.yml` have never been executed.
-- Tcl's own test suite (M1) has not been run anywhere on Android.
+- Tcl's own test suite (M1) has not been run on Bionic or anywhere on Android yet.
 
 ## Findings so far
 - Tcl 9 removed implicit `~` expansion (`file home` instead) and `tcl_platform(threaded)`; the compatibility policy now says so.
@@ -28,6 +32,6 @@ Last updated: 2026-11-03
 - The tdbc mysql/odbc/postgres drivers compile but are useless on Android; the host app does not ship them.
 
 ## Next steps
-1. **Run `tests/android-smoke.sh` on an emulator or device.** Everything else is blocked on a first real run. (On any machine with the Android SDK + an emulator: `tools/build-android-host.sh && tests/android-smoke.sh`.)
-2. Then: Tcl's own test suite on device (M1), CI.
+1. Run Tcl's own test suite under Bionic (`tests/bionic-chroot.sh` infrastructure) — the M1 gate.
+2. Run `tests/android-smoke.sh` on a KVM-accelerated emulator or a real device (JNI/Activity layer): `tools/build-android-host.sh && tests/android-smoke.sh`.
 3. Phase 2 spike: text/rendering (ADR 0002).
