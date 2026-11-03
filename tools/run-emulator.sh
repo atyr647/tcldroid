@@ -48,6 +48,8 @@ ACCEL="${EMULATOR_ACCEL:-auto}"
 [ "$ACCEL" = auto ] && { [ -w /dev/kvm ] && ACCEL=on || ACCEL=off; }
 log "booting emulator (accel=$ACCEL; software emulation is slow, be patient)"
 mkdir -p "$BUILD_DIR/emulator-logs"
+# Without hardware acceleration the emulator refuses to start unless explicitly told software emulation is wanted.
+[ "$ACCEL" = off ] && export ANDROID_I_WANT_MY_TCG=yes
 nohup "$SDK/emulator/emulator" -avd tcldroid -no-window -no-audio -no-boot-anim \
     -no-snapshot -no-metrics -accel "$ACCEL" -gpu swiftshader_indirect \
     > "$BUILD_DIR/emulator-logs/emulator.log" 2>&1 &
@@ -55,7 +57,10 @@ echo $! > "$BUILD_DIR/emulator.pid"
 
 ADB="$SDK/platform-tools/adb"
 "$ADB" start-server >/dev/null
-"$ADB" wait-for-device
-until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do sleep 10; done
+EMU_PID="$(cat "$BUILD_DIR/emulator.pid")"
+until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do
+  kill -0 "$EMU_PID" 2>/dev/null || { tail -20 "$BUILD_DIR/emulator-logs/emulator.log" >&2; die "emulator exited before boot completed"; }
+  sleep 10
+done
 log "Android is up: $("$ADB" shell getprop ro.build.version.release | tr -d '\r') (API $("$ADB" shell getprop ro.build.version.sdk | tr -d '\r')), $("$ADB" shell uname -m | tr -d '\r')"
 echo "$ADB"
