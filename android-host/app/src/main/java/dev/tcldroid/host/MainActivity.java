@@ -175,7 +175,16 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
 
     @Override
     public void onCaret(int x, int y, int height) {
-        tkView.showKeyboard();
+        // The IME cursor position is not used yet.
+    }
+
+    @Override
+    public void onKeyboard(boolean show) {
+        if (show) {
+            tkView.showKeyboard();
+        } else {
+            tkView.hideKeyboard();
+        }
     }
 
     // ---- crash reporting (so failures can be diagnosed without adb) ------------------------------

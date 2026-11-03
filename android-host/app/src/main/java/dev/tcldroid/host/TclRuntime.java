@@ -37,6 +37,9 @@ final class TclRuntime {
 
         /** A text widget placed its insertion caret (x, y, height in pixels). */
         void onCaret(int x, int y, int height);
+
+        /** Show or hide the soft keyboard (a text field was touched / lost focus). */
+        void onKeyboard(boolean show);
     }
 
     static {

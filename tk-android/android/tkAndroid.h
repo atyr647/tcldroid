@@ -32,7 +32,8 @@ typedef struct TkAHost {
     void (*setFullscreen)(int on);
     void (*backUnhandled)(void);	/* Back pressed, no WM_DELETE_WINDOW handler */
     void (*moveToBack)(void);		/* `wm iconify .` */
-    void (*caret)(int x, int y, int height);	/* text caret moved (soft keyboard) */
+    void (*caret)(int x, int y, int height);	/* text caret moved (IME cursor position) */
+    void (*keyboard)(int show);		/* show or hide the soft keyboard */
 } TkAHost;
 
 extern TkAHost tkAHost;

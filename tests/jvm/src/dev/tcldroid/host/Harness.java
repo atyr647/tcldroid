@@ -14,6 +14,7 @@ public class Harness implements TclRuntime.Listener {
     public void onTitle(byte[] t) { System.err.println("[java] title=" + new String(t, StandardCharsets.UTF_8)); }
     public void onBack() { System.err.println("[java] onBack (unhandled)"); }
     public void onMoveToBack() { }
+    public void onKeyboard(boolean show) { System.err.println("[java] KEYBOARD " + (show ? "SHOW" : "HIDE")); }
     public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }
     void ppm(String path) throws IOException {
         try (OutputStream o = new BufferedOutputStream(new FileOutputStream(path))) {
@@ -30,6 +31,11 @@ public class Harness implements TclRuntime.Listener {
         System.err.println("[java] frames so far: " + h.frames);
         TclRuntime.touch(0, 540, 260); Thread.sleep(80); TclRuntime.touch(1, 540, 260);   // tap the first button
         Thread.sleep(800);
+        System.err.println("[java] --- tap the canvas (no keyboard expected), then the entry (SHOW), then the canvas (HIDE)");
+        TclRuntime.touch(0, 540, 800); Thread.sleep(60); TclRuntime.touch(1, 540, 800); Thread.sleep(500);
+        TclRuntime.touch(0, 540, 395); Thread.sleep(60); TclRuntime.touch(1, 540, 395); Thread.sleep(700);
+        TclRuntime.touch(0, 540, 800); Thread.sleep(60); TclRuntime.touch(1, 540, 800); Thread.sleep(700);
+        TclRuntime.touch(0, 540, 395); Thread.sleep(60); TclRuntime.touch(1, 540, 395); Thread.sleep(500);
         TclRuntime.key(true, 0, 'h', 0); TclRuntime.key(false, 0, 'h', 0);
         TclRuntime.resize(1080, 1500, 420);                                                 // keyboard-style shrink
         Thread.sleep(1200);

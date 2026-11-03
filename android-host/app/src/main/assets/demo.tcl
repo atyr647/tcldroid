@@ -41,7 +41,7 @@ set r [expr {int($dpi * 0.18)}]
 ttk::progressbar .pb -mode indeterminate
 .pb start 25
 
-text .log -height 8 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
+text .log -height 5 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
 .log insert end "Self-test output appears here.\n"
 
 # Run assets/selftest.tcl, showing its output in the text widget above.
@@ -89,10 +89,16 @@ proc benchmark {} {
     foreach r $results { .log insert end "$r\n" }
     .log insert end "frame = Tk redraw + raster ('draw') then copy to Android ('present')\n"
 }
-button .bm -text "Benchmark" -command benchmark -pady 8
-button .st -text "Run self-test" -command runSelftest -pady 8
-button .quit -text "Quit" -command exit -pady 8
+frame .btns -background #eceff1
+button .btns.bm   -text "Benchmark" -command benchmark   -pady 10
+button .btns.st   -text "Self-test" -command runSelftest -pady 10
+button .btns.quit -text "Quit"      -command exit        -pady 10
+pack .btns.bm .btns.st .btns.quit -side left -expand 1 -fill x -padx 4
 
+# The action buttons are packed first, at the bottom, so they stay visible however
+# small the window gets (for example with the soft keyboard up): Tk gives space in
+# packing order and the expanding log absorbs what is left.
+pack .btns -side bottom -fill x -padx 20 -pady 8
 pack .hdr .info -fill x
 pack .tap -fill x -padx 24 -pady 10
 pack .e -fill x -padx 24 -pady 6 -ipady 6
@@ -101,7 +107,6 @@ pack .s -fill x -padx 24
 pack .cv -fill x -padx 24 -pady 8
 pack .pb -fill x -padx 24 -pady 4
 pack .log -fill both -expand 1 -padx 24 -pady 6
-pack .bm .st .quit -fill x -padx 24 -pady 3
 
 # Back navigation: a handler here would run instead of closing the app.
 # (Left unset on purpose: with no handler, Back finishes the Activity.)

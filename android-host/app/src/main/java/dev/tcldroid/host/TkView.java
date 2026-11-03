@@ -84,6 +84,19 @@ final class TkView extends View {
         });
     }
 
+    void hideKeyboard() {
+        post(new Runnable() {
+            @Override
+            public void run() {
+                InputMethodManager imm = (InputMethodManager)
+                        getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.hideSoftInputFromWindow(getWindowToken(), 0);
+                }
+            }
+        });
+    }
+
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);

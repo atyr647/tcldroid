@@ -28,6 +28,9 @@ static Rec queue[QSIZE];
 static int qHead, qTail;
 static pthread_mutex_t qLock = PTHREAD_MUTEX_INITIALIZER;
 static int sourceCreated, presentScheduled, draining;
+static int kbRequested, kbShown;	/* soft keyboard policy, see UpdateKeyboard() */
+static void UpdateKeyboard(void);
+static TkWindow *TopOf(TkWindow *w);
 
 /* ---- frame timing (see ::tkdroid::stats) ---------------------------------------------- */
 
@@ -302,9 +305,40 @@ Tk_SetCaretPos(Tk_Window tkwin, int x, int y, int height)
 {
     int rx, ry;
 
+    UpdateKeyboard();
     if (tkAHost.caret != NULL) {
 	Tk_GetRootCoords(tkwin, &rx, &ry);
 	tkAHost.caret(rx + x, ry + y, height);
+    }
+}
+
+/*
+ * Soft keyboard policy (a phone convention, not a Tk one): the keyboard appears when
+ * the user *touches* a text-input widget that then holds the focus, and goes away when
+ * focus leaves it or the user touches something else. Scripts can force it with
+ * `::tkdroid::keyboard show|hide`.
+ */
+static int
+IsTextWidget(TkWindow *w)
+{
+    const char *c = w != NULL ? Tk_Class((Tk_Window) w) : NULL;
+
+    return c != NULL && (strcmp(c, "Entry") == 0 || strcmp(c, "Text") == 0
+	    || strcmp(c, "Spinbox") == 0 || strcmp(c, "TEntry") == 0
+	    || strcmp(c, "TCombobox") == 0 || strcmp(c, "TSpinbox") == 0);
+}
+
+static void
+UpdateKeyboard(void)
+{
+    TkWindow *f = tkA.dispPtr != NULL ? tkA.dispPtr->focusPtr : NULL;
+    int want = kbRequested && f != NULL && IsTextWidget(f);
+
+    if (want != kbShown) {
+	kbShown = want;
+	if (tkAHost.keyboard != NULL) {
+	    tkAHost.keyboard(want);
+	}
     }
 }
 
@@ -321,6 +355,23 @@ ProcessTouch(const Rec *r)
     }
     if (w == NULL) {
 	return;
+    }
+    if (r->a == 0) {		/* finger down: decide what the keyboard should do */
+	TkADrawable *hit = TkAWindowAt(r->b, r->c);
+	TkWindow *under = NULL;
+
+	while (under == NULL && hit != NULL) {
+	    under = hit->winPtr;
+	    hit = hit->parent;
+	}
+	if (IsTextWidget(under)) {
+	    kbRequested = 1;
+	} else if (kbRequested) {
+	    kbRequested = 0;
+	    if (kbShown && under != NULL) {
+		TkSetFocusWin(TopOf(under), 0);	/* the caret goes away with the keyboard */
+	    }
+	}
     }
     tkA.ptrX = r->b;
     tkA.ptrY = r->c;
@@ -382,6 +433,7 @@ CheckProc(void *cd, int flags)
     if (!(flags & TCL_WINDOW_EVENTS)) {
 	return;
     }
+    UpdateKeyboard();
     while (Pop(&r)) {
 	switch (r.kind) {
 	case REC_TOUCH:
@@ -778,9 +830,27 @@ StatsCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+static int
+KeyboardCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    (void) cd;
+    if (objc != 2 || (strcmp(Tcl_GetString(objv[1]), "show") != 0
+	    && strcmp(Tcl_GetString(objv[1]), "hide") != 0)) {
+	Tcl_WrongNumArgs(interp, 1, objv, "show|hide");
+	return TCL_ERROR;
+    }
+    kbRequested = Tcl_GetString(objv[1])[0] == 's';
+    kbShown = kbRequested;
+    if (tkAHost.keyboard != NULL) {
+	tkAHost.keyboard(kbRequested);
+    }
+    return TCL_OK;
+}
+
 int
 TkAInitCommands(Tcl_Interp *interp)
 {
+    Tcl_CreateObjCommand2(interp, "::tkdroid::keyboard", KeyboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::stats", StatsCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::snapshot", SnapshotCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::touch", TouchCmd, NULL, NULL);

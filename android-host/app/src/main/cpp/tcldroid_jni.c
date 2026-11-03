@@ -37,7 +37,7 @@
 static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
-	gOnMoveToBack, gOnCaret;
+	gOnMoveToBack, gOnCaret, gOnKeyboard;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -165,7 +165,16 @@ Caret(int x, int y, int height)
     Check(e);
 }
 
-static const TkAHost host = {Present, SetTitle, NULL, BackUnhandled, MoveToBack, Caret};
+static void
+Keyboard(int show)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gOnKeyboard, show ? JNI_TRUE : JNI_FALSE);
+    Check(e);
+}
+
+static const TkAHost host = {Present, SetTitle, NULL, BackUnhandled, MoveToBack, Caret, Keyboard};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -379,6 +388,7 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gOnBack = (*env)->GetMethodID(env, lc, "onBack", "()V");
     gOnMoveToBack = (*env)->GetMethodID(env, lc, "onMoveToBack", "()V");
     gOnCaret = (*env)->GetMethodID(env, lc, "onCaret", "(III)V");
+    gOnKeyboard = (*env)->GetMethodID(env, lc, "onKeyboard", "(Z)V");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {
 	return JNI_FALSE;	/* NoClassDefFoundError is pending */

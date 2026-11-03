@@ -36,7 +36,7 @@ FLAGS="$DEFS -DBUILD_tk -DUSE_TCL_STUBS -DTK_LIBRARY=\"//zipfs:/lib/tk\" -fPIC -
 
 compile_one() {
   src="$1"; o="$OUT/obj/$(basename "$(dirname "$src")")_$(basename "$src" .c).o"
-  if [ ! -f "$o" ] || [ "$src" -nt "$o" ] || [ -n "${FORCE:-}" ] || [ "$TK/android/tkAndroidPriv.h" -nt "$o" ]; then
+  if [ ! -f "$o" ] || [ "$src" -nt "$o" ] || [ -n "${FORCE:-}" ] || [ "$TK/android/tkAndroidPriv.h" -nt "$o" ] || [ "$TK/android/tkAndroid.h" -nt "$o" ]; then
     $CC $FLAGS -c "$src" -o "$o" 2>"$o.err" || { echo "FAILED: $src"; sed 's/^/    /' "$o.err" | head -25; return 1; }
   fi
 }
