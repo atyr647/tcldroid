@@ -32,12 +32,35 @@ mkdir -p "$ROOT/apex/com.android.runtime"
 for d in bin lib64; do debugfs -R "rdump /$d $ROOT/apex/com.android.runtime" "$T/apex_payload.img" 2>/dev/null; done
 
 # Platform libs a Tcl build links against, plus a shell for `exec` tests.
-for f in lib64/libz.so lib64/liblog.so bin/sh; do
+# toybox is Android's coreutils (cat, ls, echo, ... are symlinks to it) and its shell.
+for f in lib64/libz.so lib64/liblog.so bin/sh bin/toybox; do
   debugfs -R "dump /system/$f $ROOT/system/$f" "$SYS" 2>/dev/null
 done
-chmod +x "$ROOT/system/bin/sh"
+chmod +x "$ROOT/system/bin/sh" "$ROOT/system/bin/toybox"
+for a in cat cp date dirname echo env expr false grep head id kill ln ls mkdir mktemp mv printf pwd rm rmdir sed sleep sort stat tail tee test touch tr true uname wc which xargs chmod chown cut basename readlink diff cmp od hostname; do
+  ln -sf toybox "$ROOT/system/bin/$a"
+done
 # Same symlinks the real image has.
 ln -s /apex/com.android.runtime/bin/linker64 "$ROOT/system/bin/linker64"
 for l in libc libm libdl; do ln -s /apex/com.android.runtime/lib64/bionic/$l.so "$ROOT/system/lib64/$l.so"; done
-ln -s /apex/com.android.runtime/lib64/libc++.so "$ROOT/system/lib64/libc++.so"
+# Resolve toybox's shared-library dependencies recursively from the image
+# (/system/lib64, else the Runtime APEX already extracted above).
+declare -A seen=([libc.so]=1 [libm.so]=1 [libdl.so]=1)
+queue=("$ROOT/system/bin/toybox")
+while [ ${#queue[@]} -gt 0 ]; do
+  f="${queue[0]}"; queue=("${queue[@]:1}")
+  for l in $(readelf -d "$f" 2>/dev/null | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'); do
+    [ -z "${seen[$l]:-}" ] || continue; seen[$l]=1
+    if [ -e "$ROOT/system/lib64/$l" ]; then queue+=("$ROOT/system/lib64/$l"); continue; fi
+    if [ -e "$ROOT/apex/com.android.runtime/lib64/$l" ]; then
+      ln -s "/apex/com.android.runtime/lib64/$l" "$ROOT/system/lib64/$l"
+      queue+=("$ROOT/apex/com.android.runtime/lib64/$l"); continue
+    fi
+    if debugfs -R "dump /system/lib64/$l $ROOT/system/lib64/$l" "$SYS" 2>/dev/null && [ -s "$ROOT/system/lib64/$l" ]; then
+      queue+=("$ROOT/system/lib64/$l")
+    else
+      rm -f "$ROOT/system/lib64/$l"; log "warning: $l not found in image (needed by $(basename "$f"))"
+    fi
+  done
+done
 log "Bionic root ready: $ROOT ($(du -sh "$ROOT" | cut -f1))"
