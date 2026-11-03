@@ -24,12 +24,17 @@ for abi in "${abis[@]}"; do
   export STRIP="$TOOLCHAIN/bin/llvm-strip" NM="$TOOLCHAIN/bin/llvm-nm"
   export TCLSH_NATIVE
 
+  # Bionic does not let a dlopen()ed library borrow symbols (trunc, cos, ...) from the
+  # executable's libm: package libraries must list -lm themselves (LIBS=-lm below), or
+  # e.g. `package require sqlite3` fails with 'cannot locate symbol "trunc"'.
+  rm -rf "$work/pkgs"    # packages are configured at first `make`; force it to see LIBS
   log "[$abi] configuring Tcl $TCL_VERSION (minSdk $ANDROID_MIN_API)"
   # Android defines __ANDROID__ itself; ANDROID is what tclZipfs.c tests for.
   "$BUILD_DIR/src/tcl$TCL_VERSION/unix/configure" \
       --host="$triple" --prefix="$prefix" \
       --enable-shared --disable-rpath \
       CFLAGS="-DANDROID -fPIC" LDFLAGS="-Wl,-z,max-page-size=16384" \
+      LIBS="-lm" \
       ${TCL_CONFIGURE_EXTRA:-} >configure.log 2>&1 \
     || { tail -30 configure.log; die "[$abi] configure failed (see $work/configure.log)"; }
 

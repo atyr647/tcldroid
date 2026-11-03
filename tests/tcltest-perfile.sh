@@ -21,7 +21,7 @@ host)
   B="$BUILD_DIR/host/tcl"; [ -x "$B/tcltest" ] || make -C "$B" tcltest >/dev/null
   W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT; mkdir -p "$W/home" "$W/tmp"; cp -r "$SRC_TESTS" "$W/tests"
   (cd "$SRC_TESTS" && ls *.test) | \
-    xargs -P4 -I{} env -i PATH=/usr/bin:/bin LD_LIBRARY_PATH="$B" HOME="$W/home" TMPDIR="$W/tmp" \
+    xargs -P4 -I{} env -i PATH=/usr/bin:/bin LANG=C.UTF-8 LD_LIBRARY_PATH="$B" HOME="$W/home" TMPDIR="$W/tmp" \
       TESTROOT="$W" TCLTEST="$B/tcltest" sh -c "$RUNNER" sh {} | sort > "$OUT"
   ;;
 android)

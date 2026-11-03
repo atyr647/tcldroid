@@ -19,7 +19,7 @@ host)
   [ -x "$B/tcltest" ] || make -C "$B" tcltest >/dev/null
   cp -a "$SRC_TESTS" "$W/tests"; mkdir -p "$W/home" "$W/tmp"
   cd "$W/tests"
-  env -i PATH=/usr/bin:/bin LD_LIBRARY_PATH="$B" HOME="$W/home" TMPDIR="$W/tmp" \
+  env -i PATH=/usr/bin:/bin LANG=C.UTF-8 LD_LIBRARY_PATH="$B" HOME="$W/home" TMPDIR="$W/tmp" \
       "$B/tcltest" all.tcl "$@" > "$OUT" 2>&1
   ;;
 android)
@@ -35,9 +35,11 @@ android)
   TCL="$ROOT/data/local/tcl"; rm -rf "$TCL" "$ROOT/data/local/tmp"
   mkdir -p "$TCL" "$ROOT/data/local/tmp/home" "$ROOT/data/local/tmp/tmp"
   cp -a "$INST/bin" "$INST/lib" "$TCL/"; cp "$B/tcltest" "$TCL/bin/"
+  # load.test/unload.test/pkgMkIndex.test look for dltest/ next to the interpreter.
+  [ -d "$B/dltest" ] && cp -a "$B/dltest" "$TCL/bin/dltest"
   cp -a "$SRC_TESTS" "$TCL/tests"
   timeout "${TCLTEST_TIMEOUT:-3000}" env -i PATH=/system/bin LD_LIBRARY_PATH=/data/local/tcl/lib \
-      HOME=/data/local/tmp/home TMPDIR=/data/local/tmp/tmp \
+      HOME=/data/local/tmp/home TMPDIR=/data/local/tmp/tmp TCLLIBPATH=/data/local/tcl/lib \
       "$(command -v chroot)" "$ROOT" /system/bin/sh -c \
       'cd /data/local/tcl/tests && exec /data/local/tcl/bin/tcltest all.tcl "$@"' sh "$@" \
       2>&1 | grep -v "linkerconfig\|linker config" > "$OUT"
