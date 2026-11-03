@@ -13,6 +13,21 @@ Every command/option/`wm` subcommand in [compatibility-matrix.md](compatibility-
 | **Accepted** | Command/option accepted and its value stored and returned by queries, but it has no visible effect on Android. |
 | **Unsupported** | Raises a clear Tcl error (`… is not supported on Android`). Used sparingly. |
 
+## Product target: apps that run well on touch
+
+Unmodified scripts must *run*; the platform makes them *usable* by default, without editing them:
+
+- **Density scaling:** `tk scaling` is set from the display density at startup, so point-sized fonts and `-width`/`-padx` in screen units come out physically sensible. Pixel-sized layouts are not rewritten.
+- **Touch targets:** no automatic resizing of widgets. An opt-in `android::touchpad`-style helper package (Phase 3) provides larger hit slop and scrolling-by-drag for `canvas`, `text`, `listbox` and `ttk::treeview`.
+- **Soft keyboard:** when the IME is shown the surface is resized (`adjustResize`); the focused widget is scrolled into view by the host. Scripts see an ordinary `<Configure>`.
+- **Input sources:** touch, stylus, mouse and hardware keyboard all work; hover-only UI degrades gracefully, never required.
+
+## Things Android forbids or changes
+
+- **Executables:** since Android 10 an app cannot execute files from its writable storage. Binary Tcl extensions load only from the APK's native-library directory, so they must be bundled at packaging time; there is no on-device binary package install. `exec` and `open |cmd` can run only system binaries that exist and are permitted (e.g. `/system/bin/sh`); do not rely on them.
+- **Process death:** Android may kill the process at any time. The Tcl interpreter lives in a process-level singleton, not in the Activity, so rotation/recreation does not restart the script. Scripts that need to survive process death handle `<<AndroidSaveState>>` and restore on start; nothing else is persisted for them.
+- **Multi-window/desktop mode:** supported as resizing of the single surface (per-Activity); true multi-OS-window Tk toplevels are not planned.
+
 ## Window-manager model
 
 Android has one app surface per Activity, not a desktop of free windows.

@@ -1,6 +1,6 @@
 # ADR 0002 — Native Tk backend architecture
 
-- Status: **Proposed** (Phase 0). Needs owner sign-off on the interpretation in ⚠.
+- Status: **Accepted** 2026-11-03 (owner delegated the judgement calls), including the reading of "no X11 emulation" below and the dedicated-Tcl-thread design.
 - Date: 2026-11-03
 
 ## Audit findings (Tk 9.0.4)

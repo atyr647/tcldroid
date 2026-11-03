@@ -1,6 +1,6 @@
 # ADR 0001 — Pinned baseline: versions, Android targets, build system
 
-- Status: **Proposed** (Phase 0). Needs owner sign-off on the two items marked ⚠.
+- Status: **Accepted** 2026-11-03 (owner delegated the judgement calls). Tcl 9 stays the baseline; the Metakit/8.6 question is a hard decision gate before Phase 4, and earlier if a survey of the owner's real Starkits shows most are Metakit/8.x.
 - Date: 2026-11-03
 
 ## Decision
