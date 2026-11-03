@@ -12,6 +12,7 @@
 #include "tkAndroidPriv.h"
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 
 /* ---- the UI-thread -> Tcl-thread queue ------------------------------------------- */
 
@@ -27,6 +28,29 @@ static Rec queue[QSIZE];
 static int qHead, qTail;
 static pthread_mutex_t qLock = PTHREAD_MUTEX_INITIALIZER;
 static int sourceCreated, presentScheduled, draining;
+
+/* ---- frame timing (see ::tkdroid::stats) ---------------------------------------------- */
+
+typedef struct Stat { double last, sum, max; } Stat;
+static Stat drawStat, presentStat;
+static long statFrames, lastArea;
+
+static double
+NowMs(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double) ts.tv_sec * 1000.0 + (double) ts.tv_nsec / 1e6;
+}
+
+static void
+Record(Stat *st, double ms)
+{
+    st->last = ms;
+    st->sum += ms;
+    if (ms > st->max) st->max = ms;
+}
 
 static void
 Push(Rec r)
@@ -393,17 +417,20 @@ static void
 PresentIdle(void *cd)
 {
     TkARect r;
+    double t0, t1, t2;
 
     (void) cd;
     presentScheduled = 0;
     if (!tkA.dirty || draining) {
 	return;
     }
+    t0 = NowMs();
     draining = 1;
     while (Tcl_DoOneEvent(TCL_WINDOW_EVENTS | TCL_IDLE_EVENTS | TCL_DONT_WAIT)) {
 	/* keep going until Tk has nothing left to draw */
     }
     draining = 0;
+    t1 = NowMs();
     r = tkA.dirtyRect;
     tkA.dirty = 0;
     if (r.x1 < 0) r.x1 = 0;
@@ -412,6 +439,11 @@ PresentIdle(void *cd)
     if (r.y2 > tkA.height) r.y2 = tkA.height;
     if (tkAHost.present != NULL && r.x1 < r.x2 && r.y1 < r.y2) {
 	tkAHost.present(tkA.root->pix, tkA.width, tkA.height, r.x1, r.y1, r.x2, r.y2);
+	t2 = NowMs();
+	Record(&drawStat, t1 - t0);
+	Record(&presentStat, t2 - t1);
+	statFrames++;
+	lastArea = (long) (r.x2 - r.x1) * (long) (r.y2 - r.y1);
     }
 }
 
@@ -714,9 +746,42 @@ ResizeCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/*
+ * ::tkdroid::stats ?reset?  ->  dict: frames, area (pixels, last frame), and for "draw"
+ * (Tk's redraw + the C rasteriser) and "present" (copy to the host + Bitmap) the last,
+ * average and maximum milliseconds per presented frame.
+ */
+static int
+StatsCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    Tcl_Obj *d = Tcl_NewDictObj();
+    double n = statFrames > 0 ? (double) statFrames : 1.0;
+
+    (void) cd;
+    if (objc == 2 && strcmp(Tcl_GetString(objv[1]), "reset") == 0) {
+	memset(&drawStat, 0, sizeof(drawStat));
+	memset(&presentStat, 0, sizeof(presentStat));
+	statFrames = 0;
+	return TCL_OK;
+    }
+#define PUT(k, v) Tcl_DictObjPut(NULL, d, Tcl_NewStringObj(k, TCL_AUTO_LENGTH), v)
+    PUT("frames", Tcl_NewWideIntObj(statFrames));
+    PUT("area", Tcl_NewWideIntObj(lastArea));
+    PUT("draw_last", Tcl_NewDoubleObj(drawStat.last));
+    PUT("draw_avg", Tcl_NewDoubleObj(drawStat.sum / n));
+    PUT("draw_max", Tcl_NewDoubleObj(drawStat.max));
+    PUT("present_last", Tcl_NewDoubleObj(presentStat.last));
+    PUT("present_avg", Tcl_NewDoubleObj(presentStat.sum / n));
+    PUT("present_max", Tcl_NewDoubleObj(presentStat.max));
+#undef PUT
+    Tcl_SetObjResult(interp, d);
+    return TCL_OK;
+}
+
 int
 TkAInitCommands(Tcl_Interp *interp)
 {
+    Tcl_CreateObjCommand2(interp, "::tkdroid::stats", StatsCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::snapshot", SnapshotCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::touch", TouchCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::key", KeyCmd, NULL, NULL);

@@ -41,7 +41,7 @@ set r [expr {int($dpi * 0.18)}]
 ttk::progressbar .pb -mode indeterminate
 .pb start 25
 
-text .log -height 7 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
+text .log -height 8 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
 .log insert end "Self-test output appears here.\n"
 
 # Run assets/selftest.tcl, showing its output in the text widget above.
@@ -60,6 +60,36 @@ proc runSelftest {} {
     if {$code} { .log insert end "error: $err\n" }
     .log see end
 }
+# Measure how fast the pipeline redraws on this device (results go to the text box).
+proc benchmark {} {
+    .log delete 1.0 end
+    .log insert end "benchmark running...\n"
+    update
+    set results {}
+    tkdroid::stats reset
+    set t0 [clock milliseconds]
+    for {set i 0} {$i < 60} {incr i} { .cv move drag 4 0; update }
+    set ms [expr {([clock milliseconds] - $t0) / 60.0}]
+    lappend results [format "canvas: move 2 shapes   %6.1f ms/frame" $ms] [format "  draw %.1f  present %.1f  (avg ms, area %d px)" \
+        [dict get [tkdroid::stats] draw_avg] [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
+    for {set i 0} {$i < 60} {incr i} { .cv move drag -4 0; update }
+    tkdroid::stats reset
+    .log delete 1.0 end
+    set t0 [clock milliseconds]
+    for {set i 0} {$i < 40} {incr i} { .log insert end "line $i of scrolling text in a text widget\n"; .log see end; update }
+    set ms [expr {([clock milliseconds] - $t0) / 40.0}]
+    lappend results [format "text: append + scroll  %6.1f ms/frame" $ms] [format "  draw %.1f  present %.1f  (avg ms, area %d px)" \
+        [dict get [tkdroid::stats] draw_avg] [dict get [tkdroid::stats] present_avg] [dict get [tkdroid::stats] area]]
+    tkdroid::stats reset
+    set t0 [clock milliseconds]
+    for {set i 0} {$i < 20} {incr i} { .s set [expr {$i * 5}]; update }
+    set ms [expr {([clock milliseconds] - $t0) / 20.0}]
+    lappend results [format "scale: slide           %6.1f ms/frame" $ms]
+    .log delete 1.0 end
+    foreach r $results { .log insert end "$r\n" }
+    .log insert end "frame = Tk redraw + raster ('draw') then copy to Android ('present')\n"
+}
+button .bm -text "Benchmark" -command benchmark -pady 8
 button .st -text "Run self-test" -command runSelftest -pady 8
 button .quit -text "Quit" -command exit -pady 8
 
@@ -71,7 +101,7 @@ pack .s -fill x -padx 24
 pack .cv -fill x -padx 24 -pady 8
 pack .pb -fill x -padx 24 -pady 4
 pack .log -fill both -expand 1 -padx 24 -pady 6
-pack .st .quit -fill x -padx 24 -pady 3
+pack .bm .st .quit -fill x -padx 24 -pady 3
 
 # Back navigation: a handler here would run instead of closing the app.
 # (Left unset on purpose: with no handler, Back finishes the Activity.)
