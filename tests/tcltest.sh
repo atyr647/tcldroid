@@ -36,9 +36,9 @@ android)
   mkdir -p "$TCL" "$ROOT/data/local/tmp/home" "$ROOT/data/local/tmp/tmp"
   cp -a "$INST/bin" "$INST/lib" "$TCL/"; cp "$B/tcltest" "$TCL/bin/"
   cp -a "$SRC_TESTS" "$TCL/tests"
-  env -i PATH=/system/bin LD_LIBRARY_PATH=/data/local/tcl/lib \
+  timeout "${TCLTEST_TIMEOUT:-3000}" env -i PATH=/system/bin LD_LIBRARY_PATH=/data/local/tcl/lib \
       HOME=/data/local/tmp/home TMPDIR=/data/local/tmp/tmp \
-      timeout "${TCLTEST_TIMEOUT:-3000}" "$(command -v chroot)" "$ROOT" /system/bin/sh -c \
+      "$(command -v chroot)" "$ROOT" /system/bin/sh -c \
       'cd /data/local/tcl/tests && exec /data/local/tcl/bin/tcltest all.tcl "$@"' sh "$@" \
       2>&1 | grep -v "linkerconfig\|linker config" > "$OUT"
   ;;
