@@ -2,6 +2,7 @@ package dev.tcldroid.host;
 
 import android.app.Activity;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.ScrollView;
@@ -61,6 +62,10 @@ public class MainActivity extends Activity {
     }
 
     private void run() {
+        append("tcldroid host 0.1.0\n"
+                + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE
+                + " (API " + Build.VERSION.SDK_INT + "), ABIs " + java.util.Arrays.toString(Build.SUPPORTED_ABIS)
+                + "\n\n");
         final String script;
         try {
             script = readAsset("selftest.tcl");
