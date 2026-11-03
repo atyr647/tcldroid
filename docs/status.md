@@ -6,7 +6,7 @@ Last updated: 2026-11-03
 | --- | --- |
 | M0 reproducible builds | **Done.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 (no source patches) for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. |
 | M1 headless Tcl on Android + core tests | **Reached.** Tcl's full suite on real Bionic (x86_64 chroot) and the host app self-test **22/22 on a real arm64 phone**. Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
-| M2 Tk on Android | **Survey done, no code yet.** Tk's platform-independent code (119 files) compiles for Android with 2 tiny patches and 3 new headers; **195 platform functions** remain (docs/tk-android-work-list.md). Nothing renders. |
+| M2 Tk on Android | **Implemented and verified on the build machine and on Bionic; the Activity layer (host app 0.2.0) has not yet been seen running on a phone.** All 195 platform functions are real (no stubs). Real Tk widgets render and respond to simulated touch on the host (glibc) and under Android's own libc (x86_64 chroot). |
 | M3–M6 | not started |
 
 ## What "on Bionic" means here
@@ -49,11 +49,17 @@ Extra skips on Android vs host (65): `icu` 58 (platform ICU not available, see p
 Real arm64 Android phone (Android user `u0_a535`, TZ `America/New_York`): **21/22 self-test checks passed**. Confirmed in a real app: the app loads `libtcl9.0.so` and `libtcldroid.so`, the Tcl thread runs, JNI callbacks and stdout-to-screen work, Tcl mounts its embedded script library by itself (`zipfs-library`, `zipfs-init-tcl`, `zipfs-mounts`), `encoding system` is `utf-8`, Unicode filenames round-trip, bundled tzdata works with `TZ`, `zlib`, event loop, coroutines, and `exec /system/bin/sh` all work.
 The one failure, `socket-loopback: couldn't open socket: operation not permitted`, was **my omission**: Android refuses `socket()` (even to localhost) unless the manifest declares `android.permission.INTERNET`. Fixed in host app 0.1.1. **Re-run on the same phone (user-reported screenshot): `TCLDROID_SMOKE: PASS 22/22`**, including `socket-loopback`. The packager (Phase 5) must therefore emit `INTERNET` by default for apps that use sockets.
 
+## Tk on Android (new)
+Verified on the **build machine (glibc, FreeType test font)** and the **Android x86_64 build under real Bionic** (`tests/bionic-chroot.sh`-style chroot, fallback box glyphs): Tk 9.0.4 loads, mounts its own script library from a zip appended to `libtk9.0.so`, creates and draws label, button, entry, check/radio, scale, listbox, spinbox, text (tags, wrapping), canvas (oval/rect/line/text), ttk widgets and photo images; a simulated touch-down/up runs a button's `-command`. Screenshots are produced by `::tkdroid::snapshot` and inspected as PNGs.
+Bugs found by this testing and fixed: Tk's shared `XGetVisualInfo` takes `depth` from `visual->bits_per_rgb` (set to 24, as macOS does); the Tcl 9 argument order is `zipfs mount zipfile mountpoint`; a stale-stub bug in `tools/build-tk.sh`.
+Host app 0.2.0 (APK) adds: `TkView` (draws Tk's frame buffer, forwards touch/keys), soft keyboard when a text widget takes the caret, `android.graphics.Paint` as the text engine, Back -> `WM_DELETE_WINDOW`, system-bar and keyboard insets, and `assets/demo.tcl` (an ordinary Tk script). JNI method signatures were checked against the compiled Java; **none of the Java, JNI frame transfer, Paint text engine, touch/IME path has run on a device yet.**
+
 ## NOT verified
+- Tk on a device or emulator: frame display, Paint text rendering and metrics, touch/keyboard input, rotation/resize, performance (redraw cost is unmeasured), Tk's own test suite against this backend, selection/clipboard (unimplemented), menus, multi-touch.
 - On the device: real DNS and non-loopback networking, the x86_64 app, other Android versions/devices, SELinux/OEM variations. One phone (arm64), one run each of 0.1.0 and 0.1.1; the phone model/Android version are not recorded because the screenshots were scrolled past the device-info header.
 - arm64 Tcl's own test suite (only the self-test has run on arm64).
 - `tests/android-smoke.sh` (the adb automation) and `.github/workflows/ci.yml` have never been run; the self-test itself has now run once by hand on a device.
-- Tk: only the compile survey exists (headers + work list); nothing links, runs or draws.
+
 
 ## Next steps
 1. (Optional) Automate the on-device run: `tests/android-smoke.sh` on a KVM-accelerated emulator or an attached phone (`tools/build-android-host.sh && tests/android-smoke.sh`). The manual run already passed.

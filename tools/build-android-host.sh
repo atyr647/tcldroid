@@ -12,12 +12,16 @@ for abi in $ANDROID_ABIS; do [ -f "$BUILD_DIR/install/android-$abi/lib/libtcl9.0
 SDK="$("$TCLDROID_ROOT/tools/fetch-android-sdk.sh" | tail -1)"
 command -v cmake >/dev/null && command -v ninja >/dev/null || die "cmake and ninja are required"
 
-# Stage only what the app ships from the Tcl build: the core library
+# Tk (with its script library appended) for each ABI.
+for abi in $ANDROID_ABIS; do "$TCLDROID_ROOT/tools/build-tk.sh" "$abi" >/dev/null; done
+
+# Stage only what the app ships from the Tcl and Tk builds: the core library
 # (script library is appended to it as a zip; see android-host/app/build.gradle).
 JNILIBS="$BUILD_DIR/jniLibs"
 for abi in $ANDROID_ABIS; do
   mkdir -p "$JNILIBS/$abi"
   cp "$BUILD_DIR/install/android-$abi/lib/libtcl9.0.so" "$JNILIBS/$abi/"
+  cp "$BUILD_DIR/tk-$abi/libtk9.0.so" "$JNILIBS/$abi/"
 done
 
 cat > "$TCLDROID_ROOT/android-host/local.properties" <<PROPS
@@ -31,5 +35,7 @@ cd "$TCLDROID_ROOT/android-host"
   -Ptcldroid.ndk="$NDK_HOME" \
   -Ptcldroid.ndkVersion="$NDK_REVISION" \
   -Ptcldroid.jniLibs="$JNILIBS" \
-  -Ptcldroid.tclRoot="$BUILD_DIR/install"
+  -Ptcldroid.tclRoot="$BUILD_DIR/install" \
+  -Ptcldroid.tkRoot="$BUILD_DIR" \
+  -Ptcldroid.tkAndroid="$TCLDROID_ROOT/tk-android/android"
 log "APK: $TCLDROID_ROOT/android-host/app/build/outputs/apk/debug/app-debug.apk"

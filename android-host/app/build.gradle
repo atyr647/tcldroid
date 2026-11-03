@@ -7,10 +7,14 @@ plugins {
 //   -Ptcldroid.ndkVersion=<revision>  its Pkg.Revision; AGP verifies it against ndk dir
 //   -Ptcldroid.jniLibs=<dir>          <abi>/libtcl9.0.so staged from the Tcl build
 //   -Ptcldroid.tclRoot=<dir>          build/install (android-<abi>/{include,lib})
+//   -Ptcldroid.tkRoot=<dir>           build/ (tk-<abi>/libtk9.0.so from tools/build-tk.sh)
+//   -Ptcldroid.tkAndroid=<dir>        tk-android/android (public header tkAndroid.h)
 def pinnedNdkDir = providers.gradleProperty('tcldroid.ndk').get()
 def pinnedNdkRev = providers.gradleProperty('tcldroid.ndkVersion').get()
 def jniLibsDir   = providers.gradleProperty('tcldroid.jniLibs').get()
 def tclRoot      = providers.gradleProperty('tcldroid.tclRoot').get()
+def tkRoot       = providers.gradleProperty('tcldroid.tkRoot').get()
+def tkAndroidDir = providers.gradleProperty('tcldroid.tkAndroid').get()
 
 android {
     namespace 'dev.tcldroid.host'
@@ -23,11 +27,11 @@ android {
         applicationId 'dev.tcldroid.host'
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName '0.1.1'
+        versionCode 3
+        versionName '0.2.0'
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild {
-            cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}" }
+            cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}", "-DTK_BUILD_ROOT=${tkRoot}", "-DTK_ANDROID_DIR=${tkAndroidDir}" }
         }
     }
 
@@ -39,12 +43,12 @@ android {
 
     packaging {
         jniLibs {
-            // libtcl9.0.so carries Tcl's script library as a zip appended to the
+            // libtcl9.0.so and libtk9.0.so carry their script libraries as zips appended to the
             // ELF file, and Tcl mounts it by opening the library's own path
             // (found with dladdr). That needs (a) the library extracted to disk
             // and (b) no stripping, which would discard the appended zip.
             useLegacyPackaging = true
-            keepDebugSymbols += ['**/libtcl9.0.so']
+            keepDebugSymbols += ['**/libtcl9.0.so', '**/libtk9.0.so']
         }
     }
 

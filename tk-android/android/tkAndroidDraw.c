@@ -120,6 +120,7 @@ Resolve(Drawable drawable, GC gc, Target *t)
 	    TkARegion *tmp = TkARegionNew();
 	    int i;
 
+	    /* the GC's region, translated to storage coordinates */
 	    for (i = 0; i < cr->n; i++) {
 		TkARect r = cr->r[i];
 
@@ -128,10 +129,6 @@ Resolve(Drawable drawable, GC gc, Target *t)
 		r.y1 += t->oy + gc->clip_y_origin;
 		r.y2 += t->oy + gc->clip_y_origin;
 		TkARegionAddRect(tmp, r);
-	    }
-	    for (i = 0; i < t->clip->n; ) {
-		/* intersect: keep only parts inside tmp */
-		i++;
 	    }
 	    {
 		TkARegion *res = TkARegionNew();

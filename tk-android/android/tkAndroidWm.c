@@ -80,7 +80,7 @@ Apply(WmInfo *w)
 static void
 RequestProc(void *cd, Tk_Window tkwin)
 {
-    WmInfo *w = ((TkWindow *) tkwin)->wmInfoPtr;
+    WmInfo *w = (WmInfo *) ((TkWindow *) tkwin)->wmInfoPtr;
 
     (void) cd;
     if (w != NULL && (w->winPtr->flags & TK_MAPPED)) {

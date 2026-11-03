@@ -68,6 +68,7 @@ main(int argc, char **argv)
     cfg.tz = argv[4];
     cfg.script = ReadFile(argv[5]);
     cfg.onOutput = OnOutput;
+    cfg.onInit = NULL;
     cfg.ctx = NULL;
 
     ok = tcldroid_run(&cfg, &result, &resultLen);

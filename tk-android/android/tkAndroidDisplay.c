@@ -78,7 +78,14 @@ XkbOpenDisplay(const char *name, int *ev, int *err, int *major, int *minor,
 
     (void) name;
     if (!screenSet) {
-	TkAndroidSetScreen(720, 1280, 320.0);
+	int w = 720, h = 1280;
+	double dpi = 320.0;
+	const char *env = getenv("TKDROID_SCREEN");	/* e.g. 1080x2200@420: for host tests */
+
+	if (env != NULL) {
+	    sscanf(env, "%dx%d@%lf", &w, &h, &dpi);
+	}
+	TkAndroidSetScreen(w, h, dpi);
     }
     if (tkA.root == NULL) {
 	tkA.root = (TkADrawable *) calloc(1, sizeof(TkADrawable));

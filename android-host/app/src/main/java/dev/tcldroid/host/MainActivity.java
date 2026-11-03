@@ -1,125 +1,186 @@
 package dev.tcldroid.host;
 
 import android.app.Activity;
-import android.graphics.Typeface;
+import android.graphics.Insets;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Process;
 import android.util.Log;
-import android.widget.ScrollView;
-import android.widget.TextView;
+import android.view.View;
+import android.view.WindowInsets;
+import android.widget.FrameLayout;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Runs assets/selftest.tcl once per process and shows its output.
- *
- * <p>The log is kept in static state so that Activity recreation re-renders it
- * instead of restarting the interpreter.
+ * Hosts Tcl/Tk. Runs assets/demo.tcl, which builds a Tk interface that draws into a
+ * {@link TkView}. The interpreter is process-lifetime state (Activity recreation on
+ * rotation is avoided with configChanges in the manifest).
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements TclRuntime.Listener, TkView.SizeListener {
     private static final String TAG = "tcldroid";
-    private static final StringBuilder LOG = new StringBuilder();
     private static boolean started;
-    private static MainActivity current;
 
-    private TextView view;
-    private ScrollView scroll;
+    private TkView tkView;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        scroll = new ScrollView(this);
-        view = new TextView(this);
-        view.setTypeface(Typeface.MONOSPACE);
-        view.setTextSize(12);
-        view.setPadding(24, 24, 24, 24);
-        view.setTextIsSelectable(true);
-        scroll.addView(view);
-        setContentView(scroll);
-
-        synchronized (LOG) {
-            current = this;
-            view.setText(LOG);
-            if (started) {
-                return;
+        FrameLayout root = new FrameLayout(this);
+        tkView = new TkView(this);
+        tkView.setSizeListener(this);
+        root.addView(tkView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        // Keep Tk clear of the status/navigation bars and the soft keyboard.
+        root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                int l, t, r, b;
+                if (Build.VERSION.SDK_INT >= 30) {
+                    Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+                    l = i.left; t = i.top; r = i.right; b = i.bottom;
+                } else {
+                    l = insets.getSystemWindowInsetLeft(); t = insets.getSystemWindowInsetTop();
+                    r = insets.getSystemWindowInsetRight(); b = insets.getSystemWindowInsetBottom();
+                }
+                v.setPadding(l, t, r, b);
+                return insets;
             }
+        });
+        setContentView(root);
+        root.requestApplyInsets();
+    }
+
+    @Override
+    public void onSizeKnown(int w, int h) {
+        if (!started) {
             started = true;
+            startTcl(w, h);
+        } else {
+            TclRuntime.resize(w, h, tkView.dpi());
         }
-        run();
+    }
+
+    private void startTcl(int w, int h) {
+        String script;
+        try {
+            copyAsset("selftest.tcl");
+            script = new String(readAsset("demo.tcl"), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            Log.e(TAG, "cannot read assets", e);
+            return;
+        }
+        if (!TclRuntime.start(this, script, this, w, h, tkView.dpi())) {
+            Log.e(TAG, "failed to start Tcl thread");
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        TclRuntime.back();	// Tk runs WM_DELETE_WINDOW, or calls onBack() if nobody handles it
     }
 
     @Override
     protected void onDestroy() {
-        synchronized (LOG) {
-            if (current == this) {
-                current = null;
-            }
-        }
         super.onDestroy();
+        if (isFinishing()) {
+            // A Tcl interpreter cannot be restarted inside a live process.
+            Process.killProcess(Process.myPid());
+        }
     }
 
-    private void run() {
-        append("tcldroid host 0.1.1\n"
-                + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE
-                + " (API " + Build.VERSION.SDK_INT + "), ABIs " + java.util.Arrays.toString(Build.SUPPORTED_ABIS)
-                + "\n\n");
-        final String script;
-        try {
-            script = readAsset("selftest.tcl");
-        } catch (IOException e) {
-            append("cannot read selftest.tcl: " + e + "\n");
-            return;
-        }
-        boolean ok = TclRuntime.start(this, script, new TclRuntime.Listener() {
-            @Override
-            public void onOutput(byte[] utf8) {
-                append(new String(utf8, StandardCharsets.UTF_8));
-            }
+    // ---- TclRuntime.Listener (Tcl thread) -------------------------------------------------
 
+    @Override
+    public void onOutput(byte[] utf8) {
+        // stdout/stderr already go to logcat (tag tcldroid) from the native side.
+    }
+
+    @Override
+    public void onDone(boolean ok, byte[] result) {
+        Log.i(TAG, "script " + (ok ? "ended" : "ERROR") + ": " + new String(result, StandardCharsets.UTF_8));
+        if (!ok) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    android.widget.Toast.makeText(MainActivity.this,
+                            "Tcl error (see logcat: tcldroid)", android.widget.Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    @Override
+    public int[] allocFrame(int w, int h) {
+        return tkView.allocFrame(w, h);
+    }
+
+    @Override
+    public void onFrame(int x1, int y1, int x2, int y2) {
+        tkView.onFrame(x1, y1, x2, y2);
+    }
+
+    @Override
+    public void onTitle(final byte[] utf8) {
+        runOnUiThread(new Runnable() {
             @Override
-            public void onDone(boolean ok, byte[] result) {
-                String r = new String(result, StandardCharsets.UTF_8);
-                Log.i(TAG, "script " + (ok ? "ok" : "ERROR") + ": " + r);
-                append((ok ? "\n[done] " : "\n[script error] ") + r + "\n");
+            public void run() {
+                setTitle(new String(utf8, StandardCharsets.UTF_8));
             }
         });
-        if (!ok) {
-            append("failed to start Tcl thread\n");
-        }
     }
 
-    private void append(final String s) {
-        synchronized (LOG) {
-            LOG.append(s);
-            final MainActivity a = current;
-            if (a != null) {
-                a.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        a.view.setText(LOG.toString());
-                        a.scroll.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                a.scroll.fullScroll(ScrollView.FOCUS_DOWN);
-                            }
-                        });
-                    }
-                });
+    @Override
+    public void onBack() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                finish();
             }
-        }
+        });
     }
 
-    private String readAsset(String name) throws IOException {
+    @Override
+    public void onMoveToBack() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                moveTaskToBack(true);
+            }
+        });
+    }
+
+    @Override
+    public void onCaret(int x, int y, int height) {
+        tkView.showKeyboard();
+    }
+
+    // ---- assets --------------------------------------------------------------------------------
+
+    private byte[] readAsset(String name) throws IOException {
         try (InputStream in = getAssets().open(name)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[4096];
+            byte[] buf = new byte[8192];
             for (int n; (n = in.read(buf)) > 0; ) {
                 out.write(buf, 0, n);
             }
-            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+            return out.toByteArray();
+        }
+    }
+
+    /** Copies an asset to filesDir/assets/ so Tcl scripts can read it as a plain file. */
+    private void copyAsset(String name) throws IOException {
+        File dir = new File(getFilesDir(), "assets");
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("cannot create " + dir);
+        }
+        try (FileOutputStream out = new FileOutputStream(new File(dir, name))) {
+            out.write(readAsset(name));
         }
     }
 }

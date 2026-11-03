@@ -164,8 +164,15 @@ tcldroid_run(const TclDroidConfig *cfg, char **result, int *resultLen)
 	int code;
 
 	Tcl_SetSystemEncoding(interp, "utf-8");
-	code = Tcl_EvalEx(interp, cfg->script, TCL_INDEX_NONE,
-		TCL_EVAL_GLOBAL);
+	if (cfg->onInit != NULL) {
+	    code = cfg->onInit(interp, cfg->ctx);
+	} else {
+	    code = TCL_OK;
+	}
+	if (code == TCL_OK) {
+	    code = Tcl_EvalEx(interp, cfg->script, TCL_INDEX_NONE,
+		    TCL_EVAL_GLOBAL);
+	}
 	msg = Tcl_GetStringFromObj(Tcl_GetObjResult(interp), &len);
 	if (code != TCL_OK) {
 	    TD_LOGW(TD_LOG_ERROR, msg);

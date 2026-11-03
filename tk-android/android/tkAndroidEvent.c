@@ -272,7 +272,17 @@ int XWarpPointer(Display *d, Window s, Window dw, int sx, int sy, unsigned w, un
 { (void) d; (void) s; (void) dw; (void) sx; (void) sy; (void) w; (void) h; (void) dx; (void) dy; return 1; }
 void TkpWarpPointer(TkDisplay *dispPtr) { (void) dispPtr; }
 void TkpSetCursor(TkpCursor cursor) { (void) cursor; }
-void Tk_SetCaretPos(Tk_Window tkwin, int x, int y, int height) { (void) tkwin; (void) x; (void) y; (void) height; }
+/* An entry/text widget with the focus placed its insertion caret: the host shows the soft keyboard. */
+void
+Tk_SetCaretPos(Tk_Window tkwin, int x, int y, int height)
+{
+    int rx, ry;
+
+    if (tkAHost.caret != NULL) {
+	Tk_GetRootCoords(tkwin, &rx, &ry);
+	tkAHost.caret(rx + x, ry + y, height);
+    }
+}
 
 static void
 ProcessTouch(const Rec *r)

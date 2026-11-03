@@ -131,5 +131,85 @@ static const TkATextEngine engine = {Open, Close, Measure, Render, Families};
 const TkATextEngine *TkAGetBuiltinEngine(void) { return &engine; }
 
 #else
-const TkATextEngine *TkAGetBuiltinEngine(void) { return NULL; }
+/*
+ * Fallback for builds without FreeType (the Android libraries): glyphs are drawn
+ * as hollow boxes. The Android app installs a real engine (android.graphics.Paint)
+ * before Tk starts; this exists so Tk can run, and be tested, without one
+ * (for example under Bionic in a chroot).
+ */
+typedef struct BoxFont { int px; } BoxFont;
+
+static void *
+BoxOpen(const char *family, int px, int bold, int italic, TkAFontInfo *info)
+{
+    BoxFont *f = (BoxFont *) calloc(1, sizeof(BoxFont));
+
+    (void) family; (void) bold; (void) italic;
+    f->px = px;
+    info->ascent = px * 4 / 5;
+    info->descent = px - info->ascent;
+    info->maxWidth = px * 3 / 5;
+    info->fixed = 1;
+    return f;
+}
+
+static void BoxClose(void *font) { free(font); }
+
+static int
+BoxMeasure(void *font, const char *s, int n)
+{
+    int count = 0, i = 0, cp;
+
+    while (i < n) {
+	int len = (int) Tcl_UtfToUniChar(s + i, &cp);
+
+	i += len < 1 ? 1 : len;
+	count++;
+    }
+    return count * ((BoxFont *) font)->px * 3 / 5;
+}
+
+static uint8_t *
+BoxRender(void *font, const char *s, int n, int *ow, int *oh, int *base)
+{
+    BoxFont *f = (BoxFont *) font;
+    int adv = f->px * 3 / 5, asc = f->px * 4 / 5, w = BoxMeasure(font, s, n), h = f->px;
+    uint8_t *m;
+    int i = 0, k = 0, x, y, cp;
+
+    if (w <= 0) {
+	return NULL;
+    }
+    m = (uint8_t *) calloc((size_t) w * (size_t) h, 1);
+    while (i < n) {
+	int len = (int) Tcl_UtfToUniChar(s + i, &cp);
+
+	i += len < 1 ? 1 : len;
+	if (cp != ' ') {
+	    for (y = asc / 3; y < asc; y++) {
+		for (x = 1; x < adv - 1; x++) {
+		    int edge = (y == asc / 3 || y == asc - 1 || x == 1 || x == adv - 2);
+
+		    if (edge) m[y * w + k * adv + x] = 255;
+		}
+	    }
+	}
+	k++;
+    }
+    *ow = w;
+    *oh = h;
+    *base = asc;
+    return m;
+}
+
+static void
+BoxFamilies(void (*add)(void *, const char *), void *ctx)
+{
+    add(ctx, "sans-serif");
+    add(ctx, "serif");
+    add(ctx, "monospace");
+}
+
+static const TkATextEngine boxEngine = {BoxOpen, BoxClose, BoxMeasure, BoxRender, BoxFamilies};
+const TkATextEngine *TkAGetBuiltinEngine(void) { return &boxEngine; }
 #endif
