@@ -11,7 +11,7 @@
 + * section. This must be defined before tk.h is read. The upstream-quality form
 + * is a dedicated ANDROID section in generic/tk.decls.
 + */
-+#if defined(__ANDROID__) && !defined(MAC_OSX_TCL)
++#if (defined(__ANDROID__) || defined(TK_ANDROID_PORT)) && !defined(MAC_OSX_TCL)
 +#   define MAC_OSX_TCL 1
 +#endif
 +
@@ -22,7 +22,7 @@
  #if !defined(_WIN32)
  #   if defined(MAC_OSX_TK)
  #	include "tkMacOSXPort.h"
-+#   elif defined(__ANDROID__)
++#   elif (defined(__ANDROID__) || defined(TK_ANDROID_PORT))
 +#	include "tkAndroidPort.h"
  #   else
  #	include "tkUnixPort.h"

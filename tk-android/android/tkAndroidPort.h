@@ -83,13 +83,13 @@
 	snprintf((buf), TCL_INTEGER_SPACE, "0x%lx", (unsigned long) (w))
 
 /*
- * PROVISIONAL: pixel format. Android's native bitmap format is RGBA_8888
- * (bytes R,G,B,A), i.e. 0xAABBGGRR as a little-endian 32-bit word.
+ * Pixel format: Tk pixel values are 0x00RRGGBB (TrueColor, red_mask 0x00FF0000).
+ * The screen buffer holds 0xFFRRGGBB, which Java's Bitmap.setPixels() takes as is.
  */
 #define TkpGetPixel(p) \
-	(0xFF000000UL | ((((p)->blue >> 8) & 0xff) << 16) \
-	| ((((p)->green >> 8) & 0xff) << 8) | (((p)->red >> 8) & 0xff))
-#define TK_XGETIMAGE_USES_ABGR32
+	((((unsigned long) ((p)->red >> 8) & 0xff) << 16) \
+	| (((unsigned long) ((p)->green >> 8) & 0xff) << 8) \
+	| ((unsigned long) ((p)->blue >> 8) & 0xff))
 
 /*
  * PROVISIONAL: Tk's own double buffering is left ON (TK_NO_DOUBLE_BUFFERING is
