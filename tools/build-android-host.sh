@@ -4,7 +4,11 @@
 #   usage: tools/build-android-host.sh [gradle task ...]     (default: assembleDebug)
 . "$(dirname "$0")/env.sh"
 
-"$TCLDROID_ROOT/tools/build-tcl-android.sh"       # idempotent enough: reuses finished trees
+# Build Tcl only if a library is missing (set FORCE_TCL=1 to rebuild).
+need_tcl=${FORCE_TCL:-}
+for abi in $ANDROID_ABIS; do [ -f "$BUILD_DIR/install/android-$abi/lib/libtcl9.0.so" ] || need_tcl=1; done
+[ -z "$need_tcl" ] || "$TCLDROID_ROOT/tools/build-tcl-android.sh"
+"$TCLDROID_ROOT/tools/fetch-ndk.sh"
 SDK="$("$TCLDROID_ROOT/tools/fetch-android-sdk.sh" | tail -1)"
 command -v cmake >/dev/null && command -v ninja >/dev/null || die "cmake and ninja are required"
 
@@ -25,6 +29,7 @@ tasks=("$@"); [ ${#tasks[@]} -gt 0 ] || tasks=(assembleDebug)
 cd "$TCLDROID_ROOT/android-host"
 ./gradlew --no-daemon "${tasks[@]}" \
   -Ptcldroid.ndk="$NDK_HOME" \
+  -Ptcldroid.ndkVersion="$NDK_REVISION" \
   -Ptcldroid.jniLibs="$JNILIBS" \
   -Ptcldroid.tclRoot="$BUILD_DIR/install"
 log "APK: $TCLDROID_ROOT/android-host/app/build/outputs/apk/debug/app-debug.apk"
