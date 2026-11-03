@@ -7,17 +7,17 @@ plugins {
 //   -Ptcldroid.ndkVersion=<revision>  its Pkg.Revision; AGP verifies it against ndk dir
 //   -Ptcldroid.jniLibs=<dir>          <abi>/libtcl9.0.so staged from the Tcl build
 //   -Ptcldroid.tclRoot=<dir>          build/install (android-<abi>/{include,lib})
-def ndkDir     = providers.gradleProperty('tcldroid.ndk').get()
-def ndkVersion = providers.gradleProperty('tcldroid.ndkVersion').get()
-def jniLibsDir = providers.gradleProperty('tcldroid.jniLibs').get()
-def tclRoot    = providers.gradleProperty('tcldroid.tclRoot').get()
+def pinnedNdkDir = providers.gradleProperty('tcldroid.ndk').get()
+def pinnedNdkRev = providers.gradleProperty('tcldroid.ndkVersion').get()
+def jniLibsDir   = providers.gradleProperty('tcldroid.jniLibs').get()
+def tclRoot      = providers.gradleProperty('tcldroid.tclRoot').get()
 
 android {
     namespace 'dev.tcldroid.host'
     compileSdk 35
     buildToolsVersion '35.0.0'
-    ndkVersion ndkVersion
-    ndkPath ndkDir
+    ndkVersion = pinnedNdkRev
+    ndkPath = pinnedNdkDir
 
     defaultConfig {
         applicationId 'dev.tcldroid.host'
