@@ -18,7 +18,7 @@
 | zlib | 1.3.2 (`compat/zlib`) | used by zipfs; zlib licence |
 | sqlite3 | 3.53.0 (`pkgs/`) | public domain |
 | itcl | 4.3.8 | Tcl licence |
-| tdbc (+ sqlite3 / mysql / odbc / postgres drivers) | 1.1.13 | the mysql/odbc/postgres drivers need external client libraries; **will not be built for Android** unless asked |
+| tdbc (+ sqlite3 / mysql / odbc / postgres drivers) | 1.1.13 | the mysql/odbc/postgres drivers need external client libraries that Android lacks; they compile but are useless there and should be excluded |
 | thread | 3.0.6 | Tcl licence |
 
 ## Reference projects to audit in Phase 0 (not yet reviewed)

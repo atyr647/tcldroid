@@ -11,7 +11,7 @@ Status legend: ⬜ not started · 🔨 in progress · ✅ verified on device/emu
 
 | Item | Class | Phase | Status |
 | --- | --- | --- | --- |
-| Cross-build `libtcl9.0.so` + `tclsh` for arm64-v8a, x86_64 | Native | 1 / M0 | see [docs/status.md](status.md) |
+| Cross-build `libtcl9.0.so` + `tclsh` for arm64-v8a, x86_64 | Native | 1 / M0 | 🔨 builds; not yet run |
 | Core test suite on device/emulator | Native | 1 / M1 | ⬜ |
 | zipfs mount of the APK at `//zipfs:/app` | Mapped | 4 | ⬜ |
 | Sockets, threads, `load`, clocks, Unicode, filesystem | Native | 1 | ⬜ |
