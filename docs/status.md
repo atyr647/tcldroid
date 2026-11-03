@@ -6,7 +6,7 @@ Last updated: 2026-11-03
 | --- | --- |
 | M0 reproducible builds | **Done.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 (no source patches) for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. |
 | M1 headless Tcl on Android + core tests | **Reached.** Tcl's full suite on real Bionic (x86_64 chroot) and the host app self-test **22/22 on a real arm64 phone**. Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
-| M2 Tk on Android | **Implemented and verified on the build machine and on Bionic; the Activity layer (host app 0.2.0) has not yet been seen running on a phone.** All 195 platform functions are real (no stubs). Real Tk widgets render and respond to simulated touch on the host (glibc) and under Android's own libc (x86_64 chroot). |
+| M2 Tk on Android | **Reached: confirmed on a real phone (host app 0.2.1).** Earlier verified on the build machine and on Bionic. All 195 platform functions are real (no stubs). Real Tk widgets render and respond to simulated touch on the host (glibc) and under Android's own libc (x86_64 chroot). |
 | M3–M6 | not started |
 
 ## What "on Bionic" means here
@@ -56,7 +56,8 @@ Host app 0.2.0 (APK) adds: `TkView` (draws Tk's frame buffer, forwards touch/key
 
 ## First phone run of Tk (0.2.0): crash found and fixed (0.2.1)
 User report: a flash of an interface with no text, then the app closed. Root cause, reproduced two independent ways: `XFree()` called `free()` on memory that Tk's xlib helper had allocated with `ckalloc` (`XGetVisualInfo`, hit by the first SVG check/radio indicator). That corrupts the heap; Android's allocator (Scudo) aborts at once. Confirmed on Bionic in the chroot: with the bug restored, `Scudo ERROR: corrupted chunk header ... SIGABRT`; with the fix, the demo plus a keyboard-style resize runs clean. Also run clean under AddressSanitizer, and the real JNI layer survives start/tap/key/resize/Back on a host JVM with `-Xcheck:jni` (`tests/jvm-jni.sh`). Fixed alongside: frames were presented before Tk's widgets had redrawn (a visible empty-UI flash; the "no text" in the screenshot), and window reads could exceed the screen buffer during a resize. 0.2.1 adds an in-app dialog (with Copy) describing a previous abnormal exit, so failures need no `adb`.
-**Still unverified on a device:** that 0.2.1 runs, the Paint text engine, touch/soft-keyboard, performance.
+**Confirmed on a real phone (user screenshot, host app 0.2.1; 1440x2791 @ 600 dpi, `tk scaling` 8.47): Tk 9.0.4 runs.** Real Tk widgets are drawn with Android's own text (Paint), touch taps run button commands ("Tapped 3 times"), a canvas item was dragged, a radio button was selected by touch, the soft keyboard appeared for the entry (caret visible) and the interface re-flowed around it. That is milestone M2 met on a device.
+**Still unverified on a device:** performance (not yet measured), text input *through* the keyboard (the screenshot shows it open, not typed into), rotation, other devices/Android versions, the abnormal-exit dialog.
 
 ## NOT verified
 - Tk on a device or emulator: frame display, Paint text rendering and metrics, touch/keyboard input, rotation/resize, performance (redraw cost is unmeasured), Tk's own test suite against this backend, selection/clipboard (unimplemented), menus, multi-touch.
