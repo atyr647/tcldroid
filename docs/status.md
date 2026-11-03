@@ -6,7 +6,8 @@ Last updated: 2026-11-03
 | --- | --- |
 | M0 reproducible builds | **Done.** `tools/build-tcl-android.sh` builds unmodified Tcl 9.0.4 (no source patches) for arm64-v8a and x86_64; `tools/build-android-host.sh` builds a debug APK containing both. |
 | M1 headless Tcl on Android + core tests | **Reached.** Tcl's full suite on real Bionic (x86_64 chroot) and the host app self-test **22/22 on a real arm64 phone**. Tcl's own suite: 70,421 tests, 0 attributable to Tcl; 14 failures, all explained (below). |
-| M2–M6 | not started |
+| M2 Tk on Android | **Survey done, no code yet.** Tk's platform-independent code (119 files) compiles for Android with 2 tiny patches and 3 new headers; **195 platform functions** remain (docs/tk-android-work-list.md). Nothing renders. |
+| M3–M6 | not started |
 
 ## What "on Bionic" means here
 No emulator was usable (this container has no KVM; Android 14 under pure software emulation never finished booting in ~90 minutes). Instead `tools/bionic-root.sh` extracts Android 14's **own** `linker64`, `libc`, `libm`, `libdl`, `libz`, `toybox` userland and `/system/etc/hosts` from the pinned system image into a chroot, and the **Android x86_64 build** of Tcl runs inside it with an empty environment. That is real Bionic and the real Android linker, but **not** the Android framework: no JNI, no Activity, no app sandbox/SELinux/seccomp, no arm64.
@@ -52,10 +53,10 @@ The one failure, `socket-loopback: couldn't open socket: operation not permitted
 - On the device: real DNS and non-loopback networking, the x86_64 app, other Android versions/devices, SELinux/OEM variations. One phone (arm64), one run each of 0.1.0 and 0.1.1; the phone model/Android version are not recorded because the screenshots were scrolled past the device-info header.
 - arm64 Tcl's own test suite (only the self-test has run on arm64).
 - `tests/android-smoke.sh` (the adb automation) and `.github/workflows/ci.yml` have never been run; the self-test itself has now run once by hand on a device.
-- Tk: nothing exists yet.
+- Tk: only the compile survey exists (headers + work list); nothing links, runs or draws.
 
 ## Next steps
 1. (Optional) Automate the on-device run: `tests/android-smoke.sh` on a KVM-accelerated emulator or an attached phone (`tools/build-android-host.sh && tests/android-smoke.sh`). The manual run already passed.
 2. Optionally run the arm64 build under `qemu-user` with an arm64 system image for Bionic coverage on that ABI.
-3. Phase 2: Tk backend (ADR 0002). The rendering/text spike needs timings from a real device or accelerated emulator to mean anything.
+3. Phase 2: implement the Tk platform layer in the order of the work list (start with the in-process 'server' families so a window and a `button` can be created without drawing; then regions, colours, fonts and drawing). The rendering/text spike (ADR 0002) needs timings from a real device to mean anything.
 4. CI on a KVM-capable runner.

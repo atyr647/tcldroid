@@ -19,6 +19,12 @@ for p in tcl tk; do
         patch -d "$BUILD_DIR/src/$p$v" -p1 < "$TCLDROID_ROOT/upstream/patches/$patch"
       done < "$TCLDROID_ROOT/upstream/patches/$p.series"
     fi
+    # Files that are new in our port (not patches of existing ones).
+    if [ "$p" = tk ] && [ -d "$TCLDROID_ROOT/tk-android/android" ]; then
+      log "overlaying tk-android/android onto $p$v"
+      mkdir -p "$BUILD_DIR/src/$p$v/android"
+      cp -a "$TCLDROID_ROOT/tk-android/android/." "$BUILD_DIR/src/$p$v/android/"
+    fi
   fi
 done
 log "sources ready in $BUILD_DIR/src"

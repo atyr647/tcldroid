@@ -52,6 +52,16 @@ Default plan is **A with batching** (record draw ops in native code, replay in o
 - `android-host/` holds the Activity, `SurfaceView`, `InputConnection`, JNI glue and Gradle project.
 - Headless Tcl (`runtime/`) must build and test without any Tk or Java code.
 
+## Decisions from the first compile survey (2026-11-03)
+
+Compiling Tk's platform-independent code for Android (`tools/survey-tk-android.sh`; results in [tk-android-work-list.md](../tk-android-work-list.md)) forced three concrete choices. All 119 files in the compile set build with zero failures; **195 platform functions** remain to be implemented, in 12 families.
+
+1. **Header selection.** Generic code picks its platform headers with ~10 irregular `#ifdef _WIN32 / MAC_OSX_TK / else` patterns across 11 files. Rather than patch all of them, Android is treated as Unix-family: `tk-android/android/tkUnixInt.h` and `tkUnixDefault.h` *shadow* the Unix headers of the same name through include-path order (`-I android` before `-I unix`), and the only upstream patches are two one-hunk changes (`upstream/patches/0001`, `0002`: `tkPort.h` and `tkPointer.c`). Cost: the names are slightly misleading; the upstream-quality form (renaming to `tkAndroidInt.h` and patching the 11 sites) can be done at submission time.
+2. **Stub tables (PROVISIONAL).** Tk's own Xlib-shaped declarations (`tkIntXlibDecls.h`, ~290 functions) exist only in the Windows and macOS sections of `generic/tk.decls`. Android selects the macOS section by defining `MAC_OSX_TCL` at the top of `tkPort.h` (before `tk.h` pulls in Xlib). This is a prototype shortcut; the correct form is a dedicated ANDROID section in `tk.decls`, which also fixes stub-slot numbering for extensions. **Must be resolved before any upstream submission.**
+3. **Reuse Unix widget drawing, not native controls.** The macOS port uses native Cocoa controls for buttons, scrollbars and menus. Unix Tk draws them itself with the Xlib-shaped API, which is what Android's backend will implement. `tkUnixButton`, `tkUnixMenubu`, `tkUnixScrlbr`, `tkUnixMenu` (plus `tkUnix3d`, `tkUnixScale`) compile against the Android port unchanged and remove 31 functions from the work list. This keeps upstream widget code and appearance (a native-looking Android theme remains a ttk-level option, Phase 3). Other Unix files (`tkUnixWm`, `tkUnixFont`, `tkUnixKey`, ...) depend on X11 behaviour and are *not* reused.
+
+Also confirmed by the survey: the Windows/macOS-style in-process pointer/grab code (`generic/tkPointer.c`) is required on Android (no X server), and `tkUnixWm.c`-style X window-manager logic is not.
+
 ## Consequences
 
 - Largest single work item is the Xlib-shaped drawing subset + font backend; the roadmap's Phase 2 sizing should be read as "comparable to a new `win/`-sized port, minus what `generic/` and `xlib/` already give us".
