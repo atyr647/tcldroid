@@ -319,7 +319,12 @@ Tk_GetPixmap(Display *display, Drawable drawable, int width, int height, int dep
     d->depth = depth;
     d->w = width > 0 ? width : 1;
     d->h = height > 0 ? height : 1;
-    d->pix = (uint32_t *) calloc((size_t) d->w * (size_t) d->h, sizeof(uint32_t));
+    /* Like an X pixmap, contents start undefined: Tk paints a colour pixmap in full before it
+     * copies it, and skipping the clear saves megabytes of memset per widget redraw. Depth-1
+     * pixmaps (clip masks, stipples) must start clear: 0 means "not drawn". */
+    d->pix = depth == 1
+	    ? (uint32_t *) calloc((size_t) d->w * (size_t) d->h, sizeof(uint32_t))
+	    : (uint32_t *) malloc((size_t) d->w * (size_t) d->h * sizeof(uint32_t));
     return (Pixmap) TKA_ID(d);
 }
 

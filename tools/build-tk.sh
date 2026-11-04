@@ -17,7 +17,7 @@ if [ "$mode" = host ]; then
   TCLINST="$BUILD_DIR/install/host"
   CC=gcc; LINKLIBS="-lfreetype -lm -lpthread"
   DEFS="-DTK_ANDROID_PORT -DTKA_TEST_FREETYPE $(pkg-config --cflags freetype2)"
-  CFLAGS_EXTRA="-g -O1"
+  CFLAGS_EXTRA="-g ${HOST_OPT:--O1}"
   # SANITIZE=1 SUFFIX=-asan: AddressSanitizer build for hunting memory bugs.
   [ -z "${SANITIZE:-}" ] || { CFLAGS_EXTRA="$CFLAGS_EXTRA -fsanitize=address -fno-omit-frame-pointer"; LINKLIBS="$LINKLIBS -fsanitize=address"; }
 else

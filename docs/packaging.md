@@ -23,6 +23,8 @@ because its id is different).
 - Back runs your `wm protocol . WM_DELETE_WINDOW` handler; with no handler the app closes.
 - Keep a distinct `--id` per app and raise `--code` for each update you install over an old one.
 
+Launch screen: `--splash '#0B0F1A'` sets its colour (white by default); the app icon is centred on it.
+
 ## Signing and updates
 
 ```

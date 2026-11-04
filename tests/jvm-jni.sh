@@ -59,3 +59,22 @@ if [ "${GESTURES:-1}" = 1 ]; then
   [ "$(grep -c '^\[tcl\] PROBE' "$OUT")" = 3 ] && echo "PASS cancel-is-not-a-click" || { echo "FAIL cancel-is-not-a-click"; fail=1; }
   [ $fail = 0 ] || exit 1
 fi
+
+# The first presented frame is the finished screen (start-up hold), not an early blank one.
+if [ "${GESTURES:-1}" = 1 ]; then
+  rm -f "$W/hold-first.ppm"
+  LD_LIBRARY_PATH="$W/lib" TZ=UTC timeout 60 "$JH/bin/java" -Djava.awt.headless=true -Djava.library.path="$W/lib" \
+      -Dfirst.ppm="$W/hold-first.ppm" -cp "$W/classes" dev.tcldroid.host.Harness "$W/lib" "$W/files" \
+      "$TCLDROID_ROOT/tests/jvm/hold.tcl" "$W/hold-last.ppm" > "$W/hold.out" 2>&1
+  python3 -I - "$W/hold-first.ppm" <<'PY' && echo "PASS first-frame-is-finished-ui" || { echo "FAIL first-frame-is-finished-ui"; exit 1; }
+import sys
+d = open(sys.argv[1], 'rb').read()
+hdr, w, h, _ = d.split(None, 4)[0:4] if False else (None, None, None, None)
+parts = d.split(b'\n', 3)
+w, h = map(int, parts[1].split())
+px = parts[3]
+i = ((h // 2) * w + w // 2) * 3
+r, g, b = px[i], px[i + 1], px[i + 2]
+sys.exit(0 if (g > 100 and r < 50 and b < 50) else 1)
+PY
+fi

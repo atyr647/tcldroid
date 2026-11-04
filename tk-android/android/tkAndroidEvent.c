@@ -85,6 +85,18 @@ Pop(Rec *r)
     return ok;
 }
 
+/* Is the next queued record another touch move? (Then this one is stale: see CheckProc.) */
+static int
+NextIsMove(void)
+{
+    int m;
+
+    pthread_mutex_lock(&qLock);
+    m = qHead != qTail && queue[qHead].kind == REC_TOUCH && queue[qHead].a == 2;
+    pthread_mutex_unlock(&qLock);
+    return m;
+}
+
 static int
 QueueEmpty(void)
 {
@@ -493,6 +505,37 @@ ProcessKey(const Rec *r)
 
 static void PresentIdle(void *cd);
 
+/*
+ * Start-up hold. An app builds its first screen over a second or more, and calls `update`
+ * on the way (for example to learn the window size). Presenting those intermediate frames
+ * shows the user a blank window, then a half-built UI. So frames are withheld, and the host's
+ * splash screen stays up, until the app is ready: it enters the blocking event loop (vwait,
+ * tkwait, mainloop: the normal end of start-up), or calls ::tkdroid::ready, or 4 seconds
+ * pass. `update` never releases the hold.
+ */
+static int hold = 1;
+static Tcl_TimerToken holdTimer;
+
+void
+TkAReady(void)
+{
+    if (hold) {
+	hold = 0;
+	if (holdTimer != NULL) {
+	    Tcl_DeleteTimerHandler(holdTimer);
+	    holdTimer = NULL;
+	}
+    }
+}
+
+static void
+HoldTimeout(void *cd)
+{
+    (void) cd;
+    holdTimer = NULL;
+    TkAReady();
+}
+
 static void
 SetupProc(void *cd, int flags)
 {
@@ -500,7 +543,10 @@ SetupProc(void *cd, int flags)
     if (!(flags & TCL_WINDOW_EVENTS)) {
 	return;
     }
-    if (!QueueEmpty() || (tkA.dirty && !presentScheduled && tkAHost.present != NULL)) {
+    if (hold && !(flags & TCL_DONT_WAIT)) {
+	TkAReady();		/* the app is waiting for events: start-up is over */
+    }
+    if (!QueueEmpty() || (tkA.dirty && !hold && !presentScheduled && tkAHost.present != NULL)) {
 	Tcl_Time t = {0, 0};
 
 	Tcl_SetMaxBlockTime(&t);
@@ -518,6 +564,12 @@ CheckProc(void *cd, int flags)
     }
     UpdateKeyboard();
     while (Pop(&r)) {
+	/* A finger moving faster than we draw leaves a backlog of positions; only the latest
+	 * matters. Dropping the older moves keeps the screen under the finger instead of lagging
+	 * behind it. (Down, up and cancel are never dropped.) */
+	if (r.kind == REC_TOUCH && r.a == 2 && NextIsMove()) {
+	    continue;
+	}
 	switch (r.kind) {
 	case REC_TOUCH:
 	    ProcessTouch(&r);
@@ -551,7 +603,7 @@ CheckProc(void *cd, int flags)
 	    break;
 	}
     }
-    if (tkA.dirty && !presentScheduled && !draining && tkAHost.present != NULL) {
+    if (tkA.dirty && !hold && !presentScheduled && !draining && tkAHost.present != NULL) {
 	presentScheduled = 1;
 	Tcl_DoWhenIdle(PresentIdle, NULL);
     }
@@ -606,6 +658,7 @@ TkCreateXEventSource(void)
     if (!sourceCreated) {
 	sourceCreated = 1;
 	Tcl_CreateEventSource(SetupProc, CheckProc, NULL);
+	holdTimer = Tcl_CreateTimerHandler(4000, HoldTimeout, NULL);
     }
 }
 
@@ -948,6 +1001,15 @@ KeyboardCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/* ::tkdroid::ready -- the first screen is complete: show it now (see the start-up hold). */
+static int
+ReadyCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    (void) cd; (void) interp; (void) objc; (void) objv;
+    TkAReady();
+    return TCL_OK;
+}
+
 /* ::tkdroid::textmenu x y flags -- show the native Cut/Copy/Paste/Select all toolbar. */
 static int
 TextMenuCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
@@ -971,6 +1033,7 @@ int
 TkAInitCommands(Tcl_Interp *interp)
 {
     Tcl_CreateObjCommand2(interp, "::tkdroid::textmenu", TextMenuCmd, NULL, NULL);
+    Tcl_CreateObjCommand2(interp, "::tkdroid::ready", ReadyCmd, NULL, NULL);
     TkAInitSystemCommands(interp);
     Tcl_CreateObjCommand2(interp, "::tkdroid::hostclipboard", TkAClipboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::keyboard", KeyboardCmd, NULL, NULL);

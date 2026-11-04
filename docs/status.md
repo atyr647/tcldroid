@@ -87,3 +87,20 @@ Implemented: system clipboard (text), long-press word selection with the native 
 **Verified here (no device):** `tests/tk-host.sh` 35 checks (host build, and the same script on the Android x86_64 build under real Bionic): clipboard round trip, copy/paste in widgets, external clipboard change drops ownership, drag-scroll, fling, tap vs drag, long-press selection, toolbar flags and actions, `<<LongPress>>`, listbox scrolling, slide-off/cancel without click, pinch events, `touchScroll 0`, rotation resize; `tests/jvm-jni.sh` 10 checks through the real JNI layer (clipboard read/write through the listener, external change, long press -> toolbar request, Copy action, pinch, cancel). **Bugs found and fixed by this work:** stale `TkCursor` freed twice (crash creating a second text widget); destroyed windows left in Tk's pointer state (crash on the next touch, e.g. after closing a dialog); touches were delivered to the pressed window instead of the one under the finger (buttons did not disarm when the finger slid off).
 
 **Not verified on a device:** the Java side (`ClipboardManager`, the floating `ActionMode` toolbar, `GestureDetector`/`ScaleGestureDetector`, haptic feedback), feel of the scroll physics and the long-press timing, toolbar placement, rotation on a real phone.
+
+## Performance and launch (0.5.1)
+
+Reported on a phone with Learn Tcl: a white screen at launch and poor speed. Profiled on the host (callgrind), fixed, measured. All numbers are wall-clock on a fast x86 desktop with the same C code (a phone is several times slower); the *ratios* are what matter.
+
+| | before | after |
+| --- | --- | --- |
+| build + first draw of Learn Tcl's home screen, warm image cache | 2.8 s | 0.49 s |
+| same, cold image cache (first launch) | 5.2 s | 1.5 s |
+| `update idletasks` on that screen | 1878 ms | ~250 ms |
+| scrolling its flattened screen (565 canvas items, 1080x2200) | 15.7 ms/frame | 7.7 ms/frame (the host text engine is cheap; on a phone every uncached string was a JNI round trip into `Paint`) |
+
+What changed: `XCopyArea` (Tk double-buffers everything through it) was a per-pixel loop with a clip scan and a dirty-rect update per pixel, now clipped row copies; `XPutImage`/`XGetImage`/text drawing no longer call a function and scan the clip list per pixel; solid fills use SIMD `memcpy` doubling; colour pixmaps are no longer zeroed on creation (X semantics); rendered text is cached by (font, string) so a scrolling screen stops re-rendering the same words every frame; touch-move events that pile up while a frame draws are coalesced to the latest. Screenshots before and after are **pixel-identical**.
+
+**White screen:** two causes. Android showed its default white window until the first frame, and `main.tcl` calls `update` early, so a blank gray `.` was presented before the UI existed. Now a launch splash (colour + icon, plus the Android 12 splash attributes) is the window background, and frames are held back until the app reaches the event loop (see device-api.md). Checked through the real JNI layer: the first frame the host receives is the finished UI (`tests/jvm-jni.sh`).
+
+**Still open:** how this feels on the phone (not measured there); a full-screen frame still copies the screen twice on its way to Android (int[] then Bitmap) and re-uploads it to the GPU; Tk's photo-alpha drawing (Learn Tcl draws ~120 small rounded-corner images per screen) is still per-pixel inside Tk; a first launch still spends seconds rasterising Learn Tcl's anti-aliased images in Tcl (cached afterwards).

@@ -72,6 +72,7 @@ TkpDeleteFont(TkFont *tkFontPtr)
     AFont *f = (AFont *) tkFontPtr;
 
     if (f->eng != NULL) {
+	TkAFlushTextCache();	/* cached masks are keyed by the engine's font handle */
 	tkAEngine->close(f->eng);
 	f->eng = NULL;
     }

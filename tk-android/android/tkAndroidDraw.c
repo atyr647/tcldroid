@@ -215,6 +215,30 @@ Simple(Target *t)
     return t->fillStyle == FillSolid && t->maskPix == NULL;
 }
 
+/* Solid fill of n pixels: seed a few, then double with memcpy (SIMD) instead of a scalar loop. */
+static void
+FillRow(uint32_t *p, uint32_t c, int n)
+{
+    int i;
+    size_t done;
+
+    if (n < 32) {
+	for (i = 0; i < n; i++) {
+	    p[i] = c;
+	}
+	return;
+    }
+    for (i = 0; i < 16; i++) {
+	p[i] = c;
+    }
+    for (done = 16; done < (size_t) n; ) {
+	size_t chunk = done < (size_t) n - done ? done : (size_t) n - done;
+
+	memcpy(p + done, p, chunk * sizeof(uint32_t));
+	done += chunk;
+    }
+}
+
 /* Fill the span [x1, x2) on row y (storage coordinates). */
 static void
 Span(Target *t, int y, int x1, int x2)
@@ -241,9 +265,7 @@ Span(Target *t, int y, int x1, int x2)
 	if (Simple(t)) {
 	    uint32_t c = Store(t, t->fg), *p = t->pix + (size_t) y * t->stride;
 
-	    for (x = lo; x < hi; x++) {
-		p[x] = c;
-	    }
+	    FillRow(p + lo, c, hi - lo);
 	} else {
 	    uint32_t c;
 
@@ -705,14 +727,24 @@ SourceBuffer(Drawable src, uint32_t **pix, int *stride, int *w, int *h, int *ox,
     return 1;
 }
 
-/* Copy via a temporary so overlapping source/destination are safe. */
+/*
+ * XCopyArea / XCopyPlane. Tk double-buffers nearly every widget through a pixmap and
+ * copies it to the window, so this is the hottest function in the port: the work is
+ * done in clipped rows (memcpy), not per pixel. The destination clip region is a set of
+ * disjoint rectangles; the source region that exists is the intersection with the
+ * source buffer. If source and destination are the same buffer (scrolling in place) the
+ * affected rows are snapshotted first so overlap is safe. Pixels outside the source are
+ * skipped, as before.
+ */
 static int
 CopyCommon(Drawable src, Drawable dst, GC gc, int sx, int sy, int w, int h,
 	int dx, int dy, int plane)
 {
-    uint32_t *sp, *tmp;
-    int sstride, sw, sh, sox, soy, sdepth, i, j;
+    uint32_t *sp, *snap = NULL;
+    int sstride, sw, sh, sox, soy, sdepth, i0, i1, j0, j1, k, x, y;
+    int fast;
     Target t;
+    TkARect d;
 
     if (w <= 0 || h <= 0 || !SourceBuffer(src, &sp, &sstride, &sw, &sh, &sox, &soy, &sdepth)) {
 	return 0;
@@ -720,57 +752,87 @@ CopyCommon(Drawable src, Drawable dst, GC gc, int sx, int sy, int w, int h,
     if (!Resolve(dst, gc, &t)) {
 	return 0;
     }
-    tmp = (uint32_t *) malloc((size_t) w * (size_t) h * sizeof(uint32_t));
-    for (j = 0; j < h; j++) {
-	for (i = 0; i < w; i++) {
-	    int x = sx + i, y = sy + j;
+    /* source pixels that exist, in copy-area coordinates */
+    i0 = sx < 0 ? -sx : 0;
+    j0 = sy < 0 ? -sy : 0;
+    i1 = sx + w > sw ? sw - sx : w;
+    j1 = sy + h > sh ? sh - sy : h;
+    /* destination bounds, in storage coordinates */
+    d.x1 = t.ox + dx + i0;
+    d.y1 = t.oy + dy + j0;
+    d.x2 = t.ox + dx + i1;
+    d.y2 = t.oy + dy + j1;
+    if (i0 >= i1 || j0 >= j1) {
+	FreeTarget(&t);
+	return 1;
+    }
+    if (d.x1 < 0) d.x1 = 0;
+    if (d.y1 < 0) d.y1 = 0;
+    if (d.x2 > t.w) d.x2 = t.w;
+    if (d.y2 > t.h) d.y2 = t.h;
+    fast = !t.maskPix && !plane && !(sdepth == 1 && t.depth != 1);
+    if (fast && sp == t.pix) {
+	/* same buffer: snapshot the source rows involved so overlap cannot corrupt them */
+	size_t rows = (size_t) (j1 - j0), cols = (size_t) (i1 - i0);
 
-	    tmp[j * w + i] = (x < 0 || y < 0 || x >= sw || y >= sh) ? 0xFFFFFFFFu
-		    : sp[(size_t) (soy + y) * sstride + sox + x];
+	snap = (uint32_t *) malloc(rows * cols * sizeof(uint32_t));
+	if (snap != NULL) {
+	    int j;
+
+	    for (j = 0; j < (int) rows; j++) {
+		memcpy(snap + (size_t) j * cols,
+			sp + (size_t) (soy + sy + j0 + j) * sstride + sox + sx + i0,
+			cols * sizeof(uint32_t));
+	    }
 	}
     }
-    for (j = 0; j < h; j++) {
-	for (i = 0; i < w; i++) {
-	    uint32_t v = tmp[j * w + i];
-	    int x = t.ox + dx + i, y = t.oy + dy + j, k;
+    for (k = 0; k < t.clip->n; k++) {
+	TkARect r = t.clip->r[k];
 
-	    if (v == 0xFFFFFFFFu && (sx + i < 0 || sy + j < 0 || sx + i >= sw || sy + j >= sh)) {
-		continue;
-	    }
-	    if (x < 0 || y < 0 || x >= t.w || y >= t.h) {
-		continue;
-	    }
-	    for (k = 0; k < t.clip->n; k++) {
-		const TkARect *r = &t.clip->r[k];
+	if (r.x1 < d.x1) r.x1 = d.x1;
+	if (r.y1 < d.y1) r.y1 = d.y1;
+	if (r.x2 > d.x2) r.x2 = d.x2;
+	if (r.y2 > d.y2) r.y2 = d.y2;
+	if (r.x1 >= r.x2 || r.y1 >= r.y2) {
+	    continue;
+	}
+	for (y = r.y1; y < r.y2; y++) {
+	    /* copy-area coordinates of this destination row/column start */
+	    int j = y - (t.oy + dy), i = r.x1 - (t.ox + dx);
+	    uint32_t *out = t.pix + (size_t) y * t.stride + r.x1;
 
-		if (x >= r->x1 && x < r->x2 && y >= r->y1 && y < r->y2) {
-		    uint32_t c;
+	    if (fast) {
+		const uint32_t *in = snap != NULL
+			? snap + (size_t) (j - j0) * (size_t) (i1 - i0) + (size_t) (i - i0)
+			: sp + (size_t) (soy + sy + j) * sstride + sox + sx + i;
+
+		memmove(out, in, (size_t) (r.x2 - r.x1) * sizeof(uint32_t));
+	    } else {
+		for (x = r.x1; x < r.x2; x++, i++) {
+		    uint32_t v = sp[(size_t) (soy + sy + j) * sstride + sox + sx + i], c;
 
 		    if (t.maskPix) {
 			uint32_t dummy;
 
 			if (!ColorAt(&t, x, y, &dummy)) {
-			    break;
+			    continue;
 			}
 		    }
-		    if (plane) {
+		    if (plane || (sdepth == 1 && t.depth != 1)) {
 			/* depth-1 source: bit set -> foreground, clear -> background */
-			c = Store(&t, (v & 1) ? t.fg : t.bg);
-		    } else if (sdepth == 1 && t.depth != 1) {
 			c = Store(&t, (v & 1) ? t.fg : t.bg);
 		    } else {
 			c = v;
 		    }
 		    t.pix[(size_t) y * t.stride + x] = c;
-		    if (t.isRoot) {
-			TkAMarkDirty((TkARect) {x, y, x + 1, y + 1});
-		    }
-		    break;
 		}
 	    }
 	}
+	if (t.isRoot) {
+	    TkAMarkDirty(r);
+	}
     }
-    free(tmp);
+    free(snap);
     FreeTarget(&t);
     return 1;
 }
@@ -801,6 +863,9 @@ ImgGetPixel(XImage *im, int x, int y)
 	    + (size_t) y * (size_t) im->bytes_per_line;
 
     x += im->xoffset;
+    if (im->bits_per_pixel == 32 && im->byte_order == LSBFirst && im->format != XYBitmap) {
+	return ((const uint32_t *) row)[x];
+    }
     if (im->format == XYBitmap || im->bits_per_pixel == 1) {
 	unsigned char byte = row[x / 8];
 	int bit = x % 8;
@@ -842,6 +907,10 @@ ImgPutPixel(XImage *im, int x, int y, unsigned long v)
     unsigned char *row = (unsigned char *) im->data + (size_t) y * (size_t) im->bytes_per_line;
 
     x += im->xoffset;
+    if (im->bits_per_pixel == 32 && im->byte_order == LSBFirst && im->format != XYBitmap) {
+	((uint32_t *) row)[x] = (uint32_t) v;	/* the usual case: photo images */
+	return 0;
+    }
     if (im->format == XYBitmap || im->bits_per_pixel == 1) {
 	int bit = x % 8;
 
@@ -983,6 +1052,53 @@ XPutImage(Display *display, Drawable d, GC gc, XImage *im, int sx, int sy,
     if (!Resolve(d, gc, &t)) {
 	return 0;
     }
+    if (im->format == ZPixmap && im->bits_per_pixel == 32 && im->depth != 1 && t.depth != 1
+	    && t.maskPix == NULL && w > 0 && h > 0) {
+	/* The common case (Tk photo images, text rendering caches): clipped row conversion
+	 * instead of a function call and a clip-list scan per pixel. */
+	int k, swap = im->byte_order != LSBFirst;
+	TkARect box = {t.ox + dx, t.oy + dy, t.ox + dx + (int) w, t.oy + dy + (int) h};
+
+	if (box.x1 < 0) box.x1 = 0;
+	if (box.y1 < 0) box.y1 = 0;
+	if (box.x2 > t.w) box.x2 = t.w;
+	if (box.y2 > t.h) box.y2 = t.h;
+	for (k = 0; k < t.clip->n; k++) {
+	    TkARect r = t.clip->r[k];
+	    int y, x;
+
+	    if (r.x1 < box.x1) r.x1 = box.x1;
+	    if (r.y1 < box.y1) r.y1 = box.y1;
+	    if (r.x2 > box.x2) r.x2 = box.x2;
+	    if (r.y2 > box.y2) r.y2 = box.y2;
+	    if (r.x1 >= r.x2 || r.y1 >= r.y2) {
+		continue;
+	    }
+	    for (y = r.y1; y < r.y2; y++) {
+		const unsigned char *row = (const unsigned char *) im->data
+			+ (size_t) (sy + (y - (t.oy + dy))) * (size_t) im->bytes_per_line;
+		const uint32_t *in = (const uint32_t *) row + im->xoffset + sx + (r.x1 - (t.ox + dx));
+		uint32_t *out = t.pix + (size_t) y * t.stride + r.x1;
+
+		if (swap) {
+		    for (x = 0; x < r.x2 - r.x1; x++) {
+			uint32_t v = __builtin_bswap32(in[x]);
+
+			out[x] = TKA_OPAQUE | (v & 0xFFFFFF);
+		    }
+		} else {
+		    for (x = 0; x < r.x2 - r.x1; x++) {
+			out[x] = TKA_OPAQUE | (in[x] & 0xFFFFFF);
+		    }
+		}
+	    }
+	    if (t.isRoot) {
+		TkAMarkDirty(r);
+	    }
+	}
+	FreeTarget(&t);
+	return 1;
+    }
     for (j = 0; j < h; j++) {
 	for (i = 0; i < w; i++) {
 	    unsigned long v = im->f.get_pixel(im, sx + (int) i, sy + (int) j);
@@ -1028,6 +1144,21 @@ XGetImage(Display *display, Drawable d, int x, int y, unsigned int w,
     im = XCreateImage(display, DefaultVisual(display, 0), 24, ZPixmap, 0, NULL, w, h, 32, 0);
     im->data = (char *) ckalloc((size_t) im->bytes_per_line * h + 1);
     memset(im->data, 0, (size_t) im->bytes_per_line * h + 1);
+    if (im->bits_per_pixel == 32 && im->byte_order == LSBFirst && im->xoffset == 0) {
+	/* row copy of the part that exists; the rest stays 0 */
+	for (j = 0; j < h; j++) {
+	    int py = y + (int) j, x0 = x < 0 ? -x : 0, x1 = x + (int) w > sw ? sw - x : (int) w;
+	    uint32_t *out = (uint32_t *) (im->data + (size_t) j * (size_t) im->bytes_per_line);
+
+	    if (py < 0 || py >= sh) {
+		continue;
+	    }
+	    for (i = (unsigned int) x0; (int) i < x1; i++) {
+		out[i] = sp[(size_t) (soy + py) * stride + sox + x + (int) i] & 0xFFFFFF;
+	    }
+	}
+	return im;
+    }
     for (j = 0; j < h; j++) {
 	for (i = 0; i < w; i++) {
 	    int px = x + (int) i, py = y + (int) j;
@@ -1042,6 +1173,84 @@ XGetImage(Display *display, Drawable d, int x, int y, unsigned int w,
 
 /* ---- text ------------------------------------------------------------------------------------------- */
 
+/*
+ * Rendered-text cache. Rendering a string means a call into the text engine (on a phone:
+ * JNI into android.graphics.Paint, a Bitmap, a byte copy), and a scrolling screen draws the
+ * same few hundred strings every frame. Masks are kept by (font, text); when the cache grows
+ * past its budget it is simply emptied (cheap, and the working set refills within a frame).
+ */
+typedef struct TextEnt {
+    void *font;
+    int nbytes, w, h, base;
+    uint32_t hash;
+    char *text;
+    uint8_t *mask;		/* NULL: the engine had nothing to draw for this string */
+    struct TextEnt *next;
+} TextEnt;
+
+#define TC_BUCKETS 1024
+#define TC_MAX_BYTES (8u * 1024u * 1024u)
+static TextEnt *tcBucket[TC_BUCKETS];
+static size_t tcBytes;
+
+void
+TkAFlushTextCache(void)
+{
+    int i;
+
+    for (i = 0; i < TC_BUCKETS; i++) {
+	TextEnt *e = tcBucket[i], *next;
+
+	for (; e != NULL; e = next) {
+	    next = e->next;
+	    free(e->text);
+	    free(e->mask);
+	    free(e);
+	}
+	tcBucket[i] = NULL;
+    }
+    tcBytes = 0;
+}
+
+/* The mask for a string (owned by the cache; do not free), or NULL. */
+static const uint8_t *
+CachedMask(void *font, const char *utf8, int nbytes, int *w, int *h, int *base)
+{
+    uint32_t hv = (uint32_t) ((uintptr_t) font >> 4) * 2654435761u;
+    TextEnt *e;
+    int i;
+    uint8_t *mask;
+
+    for (i = 0; i < nbytes; i++) {
+	hv = (hv ^ (unsigned char) utf8[i]) * 16777619u;
+    }
+    for (e = tcBucket[hv % TC_BUCKETS]; e != NULL; e = e->next) {
+	if (e->hash == hv && e->font == font && e->nbytes == nbytes && memcmp(e->text, utf8, (size_t) nbytes) == 0) {
+	    *w = e->w; *h = e->h; *base = e->base;
+	    return e->mask;
+	}
+    }
+    mask = tkAEngine->render(font, utf8, nbytes, w, h, base);
+    e = (TextEnt *) calloc(1, sizeof(TextEnt));
+    if (e == NULL) {
+	return mask;		/* leaks one mask on out-of-memory: acceptable */
+    }
+    if (tcBytes > TC_MAX_BYTES) {
+	TkAFlushTextCache();
+    }
+    e->font = font; e->nbytes = nbytes; e->hash = hv;
+    e->text = (char *) malloc((size_t) nbytes + 1);
+    if (e->text != NULL) {
+	memcpy(e->text, utf8, (size_t) nbytes);
+    }
+    e->mask = mask;
+    e->w = mask != NULL ? *w : 0; e->h = mask != NULL ? *h : 0; e->base = mask != NULL ? *base : 0;
+    e->next = tcBucket[hv % TC_BUCKETS];
+    tcBucket[hv % TC_BUCKETS] = e;
+    tcBytes += (size_t) nbytes + sizeof(TextEnt) + (mask != NULL ? (size_t) e->w * (size_t) e->h : 0);
+    return mask;
+}
+
 void
 TkADrawText(Display *display, Drawable drawable, GC gc, void *font,
 	const char *utf8, int nbytes, int x, int y)
@@ -1054,7 +1263,7 @@ TkADrawText(Display *display, Drawable drawable, GC gc, void *font,
     if (nbytes <= 0 || tkAEngine == NULL) {
 	return;
     }
-    mask = tkAEngine->render(font, utf8, nbytes, &mw, &mh, &base);
+    mask = (uint8_t *) CachedMask(font, utf8, nbytes, &mw, &mh, &base);
     if (mask == NULL) {
 	return;
     }
@@ -1062,47 +1271,59 @@ TkADrawText(Display *display, Drawable drawable, GC gc, void *font,
 	int top = t.oy + y - base, left = t.ox + x;
 	uint32_t fg = Store(&t, t.fg);
 
-	for (j = 0; j < mh; j++) {
-	    for (i = 0; i < mw; i++) {
-		int a = mask[j * mw + i], px = left + i, py = top + j, k;
-		uint32_t cc;
+	int k;
+	int simple = Simple(&t);
 
-		if (a == 0 || px < 0 || py < 0 || px >= t.w || py >= t.h) {
-		    continue;
-		}
-		for (k = 0; k < t.clip->n; k++) {
-		    const TkARect *r = &t.clip->r[k];
+	for (k = 0; k < t.clip->n; k++) {
+	    TkARect r = t.clip->r[k];
 
-		    if (px >= r->x1 && px < r->x2 && py >= r->y1 && py < r->y2) {
-			uint32_t *dst = &t.pix[(size_t) py * t.stride + px];
+	    if (r.x1 < left) r.x1 = left;
+	    if (r.y1 < top) r.y1 = top;
+	    if (r.x2 > left + mw) r.x2 = left + mw;
+	    if (r.y2 > top + mh) r.y2 = top + mh;
+	    if (r.x1 < 0) r.x1 = 0;
+	    if (r.y1 < 0) r.y1 = 0;
+	    if (r.x2 > t.w) r.x2 = t.w;
+	    if (r.y2 > t.h) r.y2 = t.h;
+	    if (r.x1 >= r.x2 || r.y1 >= r.y2) {
+		continue;
+	    }
+	    for (j = r.y1; j < r.y2; j++) {
+		const uint8_t *m = mask + (size_t) (j - top) * mw + (r.x1 - left);
+		uint32_t *dst = &t.pix[(size_t) j * t.stride + r.x1];
 
-			if (!Simple(&t) && !ColorAt(&t, px, py, &cc)) {
-			    break;
-			}
-			if (t.depth == 1) {
-			    if (a > 127) *dst = 1;
-			} else if (a >= 250) {
-			    *dst = fg;
-			} else {
-			    uint32_t d0 = *dst;
-			    int sr = (fg >> 16) & 0xFF, sg = (fg >> 8) & 0xFF, sb = fg & 0xFF;
-			    int dr = (d0 >> 16) & 0xFF, dg = (d0 >> 8) & 0xFF, db = d0 & 0xFF;
+		for (i = 0; i < r.x2 - r.x1; i++, dst++) {
+		    int a = m[i];
+		    uint32_t cc;
 
-			    *dst = TKA_OPAQUE | (uint32_t) (((dr * (255 - a) + sr * a) / 255) << 16)
-				    | (uint32_t) (((dg * (255 - a) + sg * a) / 255) << 8)
-				    | (uint32_t) ((db * (255 - a) + sb * a) / 255);
-			}
-			if (t.isRoot) {
-			    TkAMarkDirty((TkARect) {px, py, px + 1, py + 1});
-			}
-			break;
+		    if (a == 0) {
+			continue;
+		    }
+		    if (!simple && !ColorAt(&t, r.x1 + i, j, &cc)) {
+			continue;
+		    }
+		    if (t.depth == 1) {
+			if (a > 127) *dst = 1;
+		    } else if (a >= 250) {
+			*dst = fg;
+		    } else {
+			uint32_t d0 = *dst;
+			int sr = (fg >> 16) & 0xFF, sg = (fg >> 8) & 0xFF, sb = fg & 0xFF;
+			int dr = (d0 >> 16) & 0xFF, dg = (d0 >> 8) & 0xFF, db = d0 & 0xFF;
+
+			*dst = TKA_OPAQUE | (uint32_t) (((dr * (255 - a) + sr * a) / 255) << 16)
+				| (uint32_t) (((dg * (255 - a) + sg * a) / 255) << 8)
+				| (uint32_t) ((db * (255 - a) + sb * a) / 255);
 		    }
 		}
+	    }
+	    if (t.isRoot) {
+		TkAMarkDirty(r);
 	    }
 	}
 	FreeTarget(&t);
     }
-    free(mask);
+
 }
 
 /* ---- small Tk platform hooks (as in unix/tkUnixDraw.c) -------------------------------------------------- */

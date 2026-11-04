@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: the system splash screen uses the same colour and icon. -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowSplashScreenBackground">@color/tcldroid_splash</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/app_icon</item>
+    </style>
+</resources>

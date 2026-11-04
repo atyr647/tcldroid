@@ -7,8 +7,9 @@
 #   APP_DIR      folder with main.tcl (+ files, optional icon.png)   default examples/demo
 #   APP_NAME     launcher label                                      default "Tcl Host"
 #   APP_ID       Android applicationId                               default dev.tcldroid.host
-#   APP_VERSION  versionName                                         default 0.5.0
-#   APP_CODE     versionCode                                         default 10
+#   APP_VERSION  versionName                                         default 0.5.1
+#   APP_CODE     versionCode                                         default 11
+#   APP_SPLASH   launch-screen colour #RRGGBB                        default #FFFFFF
 #   APP_KEYSTORE signing key file (else the Android debug key); with TCLDROID_KS_PASS,
 #                TCLDROID_KEY_ALIAS, TCLDROID_KEY_PASS in the environment
 #   APP_BUILD    debug (default) | release (not debuggable; needs APP_KEYSTORE)
@@ -44,8 +45,8 @@ PROPS
 APP_DIR=${APP_DIR:-$TCLDROID_ROOT/examples/demo}
 APP_NAME=${APP_NAME:-Tcl Host}
 APP_ID=${APP_ID:-dev.tcldroid.host}
-APP_VERSION=${APP_VERSION:-0.5.0}
-APP_CODE=${APP_CODE:-10}
+APP_VERSION=${APP_VERSION:-0.5.1}
+APP_CODE=${APP_CODE:-11}
 APP_DIR=$(cd "$APP_DIR" && pwd) || die "APP_DIR not found"
 [ -f "$APP_DIR/main.tcl" ] || die "$APP_DIR/main.tcl not found"
 STAGE="$BUILD_DIR/app-stage"
@@ -82,6 +83,7 @@ cd "$TCLDROID_ROOT/android-host"
   -Ptcldroid.appName="$APP_NAME" \
   -Ptcldroid.appVersion="$APP_VERSION" \
   -Ptcldroid.appCode="$APP_CODE" \
+  -Ptcldroid.splash="${APP_SPLASH:-#FFFFFF}" \
   ${APP_KEYSTORE:+-Ptcldroid.keystore="$APP_KEYSTORE"}
 mkdir -p "$TCLDROID_ROOT/out"
 safe=$(printf %s "$APP_NAME" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g;s/^-//;s/-$//')

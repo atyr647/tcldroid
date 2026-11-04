@@ -12,6 +12,7 @@ plugins {
 //   -Ptcldroid.appAssets=<dir>        contains app/ : the Tcl/Tk app's files (main.tcl, ...)
 //   -Ptcldroid.appRes=<dir>           contains drawable/app_icon.png
 //   -Ptcldroid.appId / appName / appVersion / appCode   the app's identity
+//   -Ptcldroid.splash=#RRGGBB          launch screen colour (the app icon is centred on it)
 //   -Ptcldroid.keystore=<file>        optional signing key (else the Android debug key);
 //                                     passwords/alias come from the environment so they never
 //                                     appear on a command line: TCLDROID_KS_PASS,
@@ -28,6 +29,7 @@ def appId        = providers.gradleProperty('tcldroid.appId').get()
 def appName      = providers.gradleProperty('tcldroid.appName').get()
 def appVersion   = providers.gradleProperty('tcldroid.appVersion').get()
 def appKeystore  = providers.gradleProperty('tcldroid.keystore').orNull
+def appSplash    = providers.gradleProperty('tcldroid.splash').orElse('#FFFFFF').get()
 def appCode      = providers.gradleProperty('tcldroid.appCode').get().toInteger()
 // A string resource: escape what aapt2 treats specially.
 def appNameXml   = appName.replace('&', '&amp;').replace('<', '&lt;').replace("'", "\\'").replace('"', '\\"')
@@ -46,6 +48,7 @@ android {
         versionCode appCode
         versionName appVersion
         resValue 'string', 'app_name', appNameXml
+        resValue 'color', 'tcldroid_splash', appSplash
         ndk { abiFilters 'arm64-v8a', 'x86_64' }
         externalNativeBuild {
             cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}", "-DTK_BUILD_ROOT=${tkRoot}", "-DTK_ANDROID_DIR=${tkAndroidDir}" }

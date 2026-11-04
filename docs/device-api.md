@@ -20,6 +20,13 @@ feedback commands do nothing instead of failing, so scripts need no guards.
 Sound is for effects (a few seconds), not music streaming. A script that synthesises its sounds as
 WAV data (like Learn Tcl) writes them to `$env(TMPDIR)` once and plays the file.
 
+## Start-up screen
+
+The app shows its launch screen (`--splash '#RRGGBB'` and the app icon) until the first *complete*
+screen is ready. Frames are withheld while `main.tcl` is still building its UI, even if it calls
+`update` on the way, and released when the script reaches the event loop (`vwait`, `tkwait`, or the
+end of `main.tcl`), when it calls `::tkdroid::ready`, or after 4 seconds, whichever is first.
+
 ## Facts: `::tkdroid::device ?key?`
 
 A dict (or one value): `android 1`, `sdk`, `release`, `manufacturer`, `model`, `abi`, `appId`,
