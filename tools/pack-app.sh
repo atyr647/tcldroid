@@ -11,6 +11,7 @@
 # an app can only be updated in place by an APK signed with the SAME key and the same --id, with
 # a higher --code). Make a key once with tools/make-keystore.sh and keep it safe. Passwords come
 # from the environment (TCLDROID_KS_PASS, optional TCLDROID_KEY_PASS) or are asked for.
+# APPDIR may also be a zip-based Starkit/Starpack file (MyApp.kit): it is unpacked first (see docs/starkit.md).
 # APPDIR must contain main.tcl. Everything in it is shipped; icon.png (if present)
 # becomes the launcher icon. The app runs with APPDIR as its working directory,
 # APPDIR and APPDIR/lib on auto_path, and $env(HOME) pointing at private storage.
@@ -31,6 +32,12 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option $1" >&2; exit 2;;
   esac
 done
+if [ -f "$dir" ]; then	# a Starkit/Starpack file: unpack it next to the output and pack the folder
+  kit=$dir
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/tcldroid-kit.XXXXXX")
+  python3 -I "$here/unkit.py" "$kit" "$dir" || exit 1
+  [ -n "$name" ] || name=$(basename "$kit" | sed 's/\.[^.]*$//')
+fi
 [ -d "$dir" ] || { echo "not a folder: $dir" >&2; exit 1; }
 [ -f "$dir/main.tcl" ] || { echo "$dir/main.tcl is missing (the app's entry point)" >&2; exit 1; }
 [ -n "$name" ] || name=$(basename "$(cd "$dir" && pwd)")

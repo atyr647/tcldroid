@@ -52,7 +52,7 @@ app is installed.
 ## Limits (be aware)
 
 - Release signing and AAB output exist but are not yet verified against a Play Store upload.
-- Starkits/Starpacks (Metakit-based `.kit`) are **not supported yet**; ship plain folders or zip
-  your own scripts. Tcl 9's `zipfs` works for your own zips.
+- Zip-based Starkits/Starpacks and `.vfs` folders are supported (docs/starkit.md). Metakit
+  (`mk4vfs`) kits must be unwrapped once on a desktop (`sdx unwrap`); the packager says so.
 - Third-party compiled extensions are not supported yet (only pure-Tcl packages plus those in Tcl/Tk).
 - Only tested on one phone plus host-side harnesses.

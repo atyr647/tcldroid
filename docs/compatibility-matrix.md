@@ -78,6 +78,6 @@ Status legend: ⬜ not started · 🔨 in progress · ✅ verified on device/emu
 | --- | --- | --- | --- |
 | Pure-Tcl packages | Native | 4 | ⬜ |
 | Binary extensions rebuilt for Android ABIs | Native | 4 | ⬜ |
-| Starkit (zip-based) payloads | Mapped | 4 | ⬜ |
-| Starkit (Metakit/`mk4vfs`) payloads | open — see ADR 0001 decision gate | 4 | ⬜ |
-| Starpack executable stubs (Windows/macOS/Linux) | Unsupported (payload is extracted and repackaged) | 5 | ⬜ |
+| Starkit (zip-based) payloads | Supported: unpacked at pack time (docs/starkit.md) | 4 | ✅ host + packer |
+| Starkit (Metakit/`mk4vfs`) payloads | Not read; refused with a pointer to `sdx unwrap` | 4 | ✅ refusal tested |
+| Starpack executable stubs (Windows/macOS/Linux) | Stub dropped, zip payload extracted and repackaged | 5 | ✅ |

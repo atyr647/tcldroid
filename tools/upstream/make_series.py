@@ -205,7 +205,7 @@ shutil.copytree(os.path.join(root, "tk-android", "android"), os.path.join(tk, "a
 for f in os.listdir(os.path.join(root, "tk-android", "library")):
     if f.endswith(".tcl"):
         shutil.copy(os.path.join(root, "tk-android", "library", f), os.path.join(tk, "library", f))
-commit("""Add the Android platform: android/ and library/android.tcl, a11y.tcl
+commit("""Add the Android platform: android/ and library/*.tcl (touch policy, accessibility, starkit)
 
 A native Android backend for Tk, modelled on win/ and macosx/: Tk's Xlib API implemented in-process
 (window server, software rasteriser, text through a pluggable engine), Tcl event source, window

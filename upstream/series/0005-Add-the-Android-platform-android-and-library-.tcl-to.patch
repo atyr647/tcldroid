@@ -1,8 +1,8 @@
-From d5046e1d28669d34814eee722df93ab5db032747 Mon Sep 17 00:00:00 2001
+From 3f435436c0122f1053edde2c6c6f886c0d21c143 Mon Sep 17 00:00:00 2001
 From: tcldroid <tcldroid@example.invalid>
-Date: Wed, 4 Nov 2026 17:19:17 +0000
-Subject: [PATCH] Add the Android platform: android/ and library/android.tcl,
- a11y.tcl
+Date: Wed, 4 Nov 2026 17:50:37 +0000
+Subject: [PATCH] Add the Android platform: android/ and library/*.tcl (touch
+ policy, accessibility, starkit)
 
 A native Android backend for Tk, modelled on win/ and macosx/: Tk's Xlib API implemented in-process
 (window server, software rasteriser, text through a pluggable engine), Tcl event source, window
@@ -26,9 +26,10 @@ See android/README.md. Widget code in generic/ is unchanged.
  android/tkAndroidTestEngine.c |  219 ++++++
  android/tkAndroidWindow.c     |  907 ++++++++++++++++++++++
  android/tkAndroidWm.c         |  626 +++++++++++++++
- library/a11y.tcl              |  330 ++++++++
- library/android.tcl           |  395 ++++++++++
- 19 files changed, 7391 insertions(+)
+ library/a11y.tcl              |  342 +++++++++
+ library/android.tcl           |  398 ++++++++++
+ library/starkit.tcl           |   41 +
+ 20 files changed, 7447 insertions(+)
  create mode 100644 android/README.md
  create mode 100644 android/tkAndroid.h
  create mode 100644 android/tkAndroidColor.c
@@ -48,6 +49,7 @@ See android/README.md. Widget code in generic/ is unchanged.
  create mode 100644 android/tkAndroidWm.c
  create mode 100644 library/a11y.tcl
  create mode 100644 library/android.tcl
+ create mode 100644 library/starkit.tcl
 
 diff --git a/android/README.md b/android/README.md
 new file mode 100644
@@ -6819,10 +6821,10 @@ index 0000000..345ddd3
 +}
 diff --git a/library/a11y.tcl b/library/a11y.tcl
 new file mode 100644
-index 0000000..f246705
+index 0000000..727266a
 --- /dev/null
 +++ b/library/a11y.tcl
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,342 @@
 +# a11y.tcl --
 +#
 +#	Accessibility for Tk on Android. Tk 9.0 has no accessibility API of its own, so this walks the
@@ -7109,13 +7111,25 @@ index 0000000..f246705
 +    return $w
 +}
 +
++# diagnostics: when the app folder holds a file a11y-debug, say what happens (an on-screen message)
++proc ::tkdroid::a11y::dbg {msg} {
++    variable debug
++    if {![info exists debug]} {
++	set debug [expr {[info exists ::tkdroid::appdir] && [file exists [file join $::tkdroid::appdir a11y-debug]]}]
++    }
++    if {$debug} {catch {::tkdroid::request toast text $msg}}
++}
++
 +proc ::tkdroid::a11y::tapAt {cx cy} {
++    set under [winfo containing $cx $cy]
++    dbg "Tcl: tap at $cx,$cy over [expr {$under eq "" ? "nothing" : "$under ([winfo class $under])"}]"
 +    ::tkdroid::touch down $cx $cy
 +    after 60 [list ::tkdroid::touch up $cx $cy]
 +}
 +
 +proc ::tkdroid::a11y::action {id action text} {
 +    variable keys; variable last
++    dbg "Tcl: action $action id $id text '$text'"
 +    # A click arrives with the node's centre (the host's own snapshot): tap there. No bookkeeping needed.
 +    if {$action == 16 && [regexp {^(-?\d+) (-?\d+)$} $text -> cx cy]} {
 +	tapAt $cx $cy
@@ -7155,10 +7169,10 @@ index 0000000..f246705
 +}
 diff --git a/library/android.tcl b/library/android.tcl
 new file mode 100644
-index 0000000..4b7245c
+index 0000000..e3456a3
 --- /dev/null
 +++ b/library/android.tcl
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,398 @@
 +# android.tcl --
 +#
 +#	Touch policy for Tk on Android: what a finger means to the classic widgets.
@@ -7554,6 +7568,56 @@ index 0000000..4b7245c
 +
 +# screen-reader support (loaded here so a script can also call ::tkdroid::a11y::snapshot directly)
 +source -encoding utf-8 [file join $::tk_library a11y.tcl]
++
++# Starkit-style apps say "package require starkit" (see starkit.tcl)
++package ifneeded starkit 1.3.3 [list source -encoding utf-8 [file join $::tk_library starkit.tcl]]
+diff --git a/library/starkit.tcl b/library/starkit.tcl
+new file mode 100644
+index 0000000..f16fcbe
+--- /dev/null
++++ b/library/starkit.tcl
+@@ -0,0 +1,41 @@
++# starkit.tcl --
++#
++#	The part of the Starkit contract that makes sense on Android. A Starkit's main.tcl
++#	normally opens with
++#
++#	    package require starkit
++#	    starkit::startup
++#
++#	On tcldroid the kit's files were unpacked by the packager (tools/pack-app.sh MyApp.kit), so
++#	"the kit" is the app folder. This package answers the questions kits ask about themselves:
++#
++#	  ::starkit::topdir      the app folder (where main.tcl and lib/ are)
++#	  ::starkit::mode        "starkit"
++#	  ::starkit::infoscript  the path of main.tcl
++#	  ::starkit::startup     puts topdir/lib on auto_path (idempotent); returns
++#	  ::starkit::autoextend  adds a directory of packages to auto_path
++#
++#	It does not include Metakit (mk4vfs) or the vfs package: a kit is read when you pack it,
++#	not mounted when it runs. See docs/starkit.md.
++
++package provide starkit 1.3.3
++
++namespace eval ::starkit {
++    variable topdir [expr {[info exists ::tkdroid::appdir] ? $::tkdroid::appdir : [pwd]}]
++    variable mode starkit
++    variable infoscript [file join $topdir main.tcl]
++
++    proc autoextend {dir} {
++	if {[file isdirectory $dir] && $dir ni $::auto_path} {
++	    lappend ::auto_path $dir
++	}
++	return
++    }
++
++    proc startup {} {
++	variable topdir
++	autoextend $topdir
++	autoextend [file join $topdir lib]
++	return
++    }
++}
 -- 
 2.43.0
 

@@ -4,6 +4,11 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.9.4
+- Starkit/Starpack support: `pack-app.sh MyApp.kit` unpacks a zip-based kit (Tcl 9 zipkit/zipfs starpack) and packs
+  its files; `package require starkit` works (`topdir`, `mode`, `infoscript`, `startup`); Metakit kits are refused with
+  the `sdx unwrap` way out; entries that climb out of the folder are refused. [docs/starkit.md](docs/starkit.md).
+
 ## 0.9.3
 - Accessibility diagnostics: an `a11y-debug` file in the app folder turns on on-screen messages for each step of a
   screen-reader action (see docs/accessibility.md); a general `toast` request kind.

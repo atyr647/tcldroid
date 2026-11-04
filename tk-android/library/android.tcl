@@ -393,3 +393,6 @@ proc ::tkdroid::install {} {
 
 # screen-reader support (loaded here so a script can also call ::tkdroid::a11y::snapshot directly)
 source -encoding utf-8 [file join $::tk_library a11y.tcl]
+
+# Starkit-style apps say "package require starkit" (see starkit.tcl)
+package ifneeded starkit 1.3.3 [list source -encoding utf-8 [file join $::tk_library starkit.tcl]]

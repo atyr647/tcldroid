@@ -122,3 +122,10 @@ Implemented: input modes, IME composition (inline), hardware-keyboard modifiers 
 ## Accessibility (0.9.0, P3)
 
 Implemented as described in [accessibility.md](accessibility.md). **Verified here:** the Tcl description of 14 widget kinds against real widgets (35 checks in `tests/tk/a11y.tcl`: roles, names, values, states, rectangles equal to the widget's, hidden/scrolled-out content excluded, dialogs as windows, stable ids, app overrides, and the click/set-text/focus/scroll actions acting on the real widgets); the snapshot parser on a JVM; the whole loop through the JNI layer (a screen reader appears, the host receives the snapshot, asks for a click on a node by id, Tk's button runs); Learn Tcl's real home screen (48 nodes in 4 ms, all readable). **Not verified:** TalkBack itself (the `AccessibilityNodeProvider` compiles but has never been driven by a real screen reader: spoken output, focus order, gestures, and Switch Access are unchecked), performance with a screen reader on a large screen on a phone.
+
+## Starkit / Starpack (0.9.4)
+
+Zip-based kits are unpacked by `tools/unkit.py` when packing (`pack-app.sh MyApp.kit`); `starkit.tcl` provides
+`package require starkit`. Metakit kits are detected and refused with instructions (`sdx unwrap`). Tested by
+`tests/tk/kit.tcl` and an end-to-end pack of a kit (APK holds the kit's files). Not provided: `vfs`/`vfs::zip`/
+`mk4vfs` packages, compiled extensions inside kits. See docs/starkit.md.
