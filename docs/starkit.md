@@ -20,8 +20,13 @@ virtual file system to go wrong on a phone.
 
 On any desktop with a Tcl 8.6 tclkit: `sdx unwrap MyApp.kit` makes `MyApp.vfs/`. Pass that folder
 to `pack-app.sh`. The packager recognises a Metakit file and says so rather than failing
-obscurely. (Reading Metakit directly would mean porting a C++ database library for a format that
-has been superseded by zip; if you have many kits you cannot convert, open an issue.)
+obscurely. Reading Metakit at pack time (no desktop step) is feasible, because it would be a build-machine
+script and not something that runs on the phone. It is **not built**: I could not obtain a real
+Metakit kit or the format's source in the build environment, and a reader for a binary format
+written from memory without real files to test against would not be trustworthy. It needs one or
+two real `.kit` files (for example `sdx.kit`, plus one of your own) as the test oracle; the reader
+would then be checked against `sdx unwrap` output and would refuse, never guess, on anything it
+cannot verify (every file's recorded size is checked).
 
 ## What a kit's main.tcl sees
 
