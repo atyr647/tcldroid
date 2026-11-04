@@ -172,6 +172,79 @@ TkAQueuePinch(int phase, int x, int y, int scale1000)
     Push(r);
 }
 
+/* ---- answers to platform requests: strings, so a list of their own ---- */
+
+typedef struct Res {
+    int id;
+    char *status, *payload;
+    struct Res *next;
+} Res;
+static Res *resHead, *resTail;
+
+static char *
+DupStr(const char *s)
+{
+    size_t n = strlen(s);
+    char *d = (char *) malloc(n + 1);
+
+    if (d != NULL) {
+	memcpy(d, s, n + 1);
+    }
+    return d;
+}
+
+void
+TkAQueueResult(int id, const char *status, const char *payload)
+{
+    Res *r = (Res *) calloc(1, sizeof(Res));
+
+    if (r == NULL) {
+	return;
+    }
+    r->id = id;
+    r->status = DupStr(status != NULL ? status : "error");
+    r->payload = DupStr(payload != NULL ? payload : "");
+    pthread_mutex_lock(&qLock);
+    if (resTail != NULL) {
+	resTail->next = r;
+    } else {
+	resHead = r;
+    }
+    resTail = r;
+    pthread_mutex_unlock(&qLock);
+    if (tkA.tclThread != NULL) {
+	Tcl_ThreadAlert(tkA.tclThread);
+    }
+}
+
+static Res *
+PopResult(void)
+{
+    Res *r;
+
+    pthread_mutex_lock(&qLock);
+    r = resHead;
+    if (r != NULL) {
+	resHead = r->next;
+	if (resHead == NULL) {
+	    resTail = NULL;
+	}
+    }
+    pthread_mutex_unlock(&qLock);
+    return r;
+}
+
+static int
+NoResults(void)
+{
+    int e;
+
+    pthread_mutex_lock(&qLock);
+    e = resHead == NULL;
+    pthread_mutex_unlock(&qLock);
+    return e;
+}
+
 void
 TkAQueueLifecycle(int kind)
 {
@@ -475,6 +548,37 @@ CallScript(const char *kind, int a, int b, int c, int d)
     }
 }
 
+/* ::tkdroid::native result id status payload */
+static void
+DeliverResult(int id, const char *status, const char *payload)
+{
+    TkMainInfo *mainInfo = TkGetMainInfoList();
+    Tcl_Interp *interp = mainInfo != NULL ? mainInfo->interp : NULL;
+    Tcl_Obj *argv[6];
+    int i;
+
+    if (interp == NULL || Tcl_FindCommand(interp, "::tkdroid::native", NULL, TCL_GLOBAL_ONLY) == NULL) {
+	return;
+    }
+    argv[0] = Tcl_NewStringObj("::tkdroid::native", TCL_AUTO_LENGTH);
+    argv[1] = Tcl_NewStringObj("result", TCL_AUTO_LENGTH);
+    argv[2] = Tcl_NewIntObj(id);
+    argv[3] = Tcl_NewStringObj(status, TCL_AUTO_LENGTH);
+    argv[4] = Tcl_NewStringObj(payload, TCL_AUTO_LENGTH);
+    argv[5] = Tcl_NewIntObj(0);
+    for (i = 0; i < 6; i++) {
+	Tcl_IncrRefCount(argv[i]);
+    }
+    Tcl_Preserve(interp);
+    if (Tcl_EvalObjv(interp, 6, argv, TCL_EVAL_GLOBAL) != TCL_OK) {
+	Tcl_BackgroundException(interp, TCL_ERROR);
+    }
+    Tcl_Release(interp);
+    for (i = 0; i < 6; i++) {
+	Tcl_DecrRefCount(argv[i]);
+    }
+}
+
 static void
 ProcessTouch(const Rec *r)
 {
@@ -590,7 +694,7 @@ SetupProc(void *cd, int flags)
     if (hold && !(flags & TCL_DONT_WAIT)) {
 	TkAReady();		/* the app is waiting for events: start-up is over */
     }
-    if (!QueueEmpty() || (tkA.dirty && !hold && !presentScheduled && tkAHost.present != NULL)) {
+    if (!QueueEmpty() || !NoResults() || (tkA.dirty && !hold && !presentScheduled && tkAHost.present != NULL)) {
 	Tcl_Time t = {0, 0};
 
 	Tcl_SetMaxBlockTime(&t);
@@ -645,6 +749,16 @@ CheckProc(void *cd, int flags)
 		tkAHost.lifecycleDone(r.a);
 	    }
 	    break;
+	}
+    }
+    {
+	Res *res;
+
+	while ((res = PopResult()) != NULL) {
+	    DeliverResult(res->id, res->status, res->payload);
+	    free(res->status);
+	    free(res->payload);
+	    free(res);
 	}
     }
     if (tkA.dirty && !hold && !presentScheduled && !draining && tkAHost.present != NULL) {

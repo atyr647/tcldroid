@@ -38,7 +38,7 @@ static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
 	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu, gVibrate, gHaptic, gSoundPreload,
-	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen;
+	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen, gRequest, gCheckPerm;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -316,9 +316,34 @@ SystemInfo(void)
     return s;
 }
 
+static void
+Request(int id, const char *kind, const char *args)
+{
+    JNIEnv *e = Env();
+    jbyteArray k = ToByteArray(e, kind, (jsize) strlen(kind));
+    jbyteArray a = ToByteArray(e, args, (jsize) strlen(args));
+
+    (*e)->CallVoidMethod(e, gListener, gRequest, id, k, a);
+    (*e)->DeleteLocalRef(e, k);
+    (*e)->DeleteLocalRef(e, a);
+    Check(e);
+}
+
+static int
+CheckPermission(const char *permission)
+{
+    JNIEnv *e = Env();
+    jbyteArray p = ToByteArray(e, permission, (jsize) strlen(permission));
+    jint r = (*e)->CallIntMethod(e, gListener, gCheckPerm, p);
+
+    (*e)->DeleteLocalRef(e, p);
+    Check(e);
+    return (int) r;
+}
+
 static const TkAHost host = {Present, SetTitle, Fullscreen, BackUnhandled, MoveToBack, Caret, Keyboard,
 	GetClipboard, SetClipboard, TextMenu, Vibrate, Haptic, SoundPreload, SoundPlay, SoundStop,
-	Bell, LifecycleDone, SystemInfo};
+	Bell, LifecycleDone, SystemInfo, Request, CheckPermission};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -545,6 +570,8 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gLifeDone = (*env)->GetMethodID(env, lc, "onLifecycleDone", "(I)V");
     gSysInfo = (*env)->GetMethodID(env, lc, "systemInfo", "()[B");
     gFullscreen = (*env)->GetMethodID(env, lc, "onFullscreen", "(Z)V");
+    gRequest = (*env)->GetMethodID(env, lc, "onRequest", "(I[B[B)V");
+    gCheckPerm = (*env)->GetMethodID(env, lc, "checkPermission", "([B)I");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {
 	return JNI_FALSE;	/* NoClassDefFoundError is pending */
@@ -652,4 +679,16 @@ Java_dev_tcldroid_host_TclRuntime_nativeLifecycle(JNIEnv *env, jclass clazz, jin
 {
     (void) env; (void) clazz;
     TkAQueueLifecycle(kind);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeResult(JNIEnv *env, jclass clazz, jint id,
+	jbyteArray status, jbyteArray payload)
+{
+    char *st = DupBytes(env, status), *pl = DupBytes(env, payload);
+
+    (void) clazz;
+    TkAQueueResult(id, st, pl);
+    free(st);
+    free(pl);
 }

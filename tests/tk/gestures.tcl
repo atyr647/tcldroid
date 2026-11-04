@@ -181,6 +181,16 @@ check rotate-landscape {[winfo width .] == 2200 && [winfo height .] == 1080 && [
 ::tkdroid::resize 1080 2200; update
 check rotate-portrait {[winfo width .] == 1080 && [winfo height .] == 2200}
 destroy .rot
+# ---- platform services without a host: an immediate, clean error through the callback ------------------
+set ::svc {}
+::tkdroid::pickfile -command {lappend ::svc}
+::tkdroid::openurl https://example.org -command {lappend ::svc}
+vwait ::svc
+update
+check svc-headless-error {[lindex $::svc 0 0] eq "error"}
+check svc-permitted-headless {[::tkdroid::permitted android.permission.CAMERA] == 0}
+check svc-bad-options {[catch {::tkdroid::savefile -name x -command y}] && [catch {::tkdroid::openurl}]}
+
 # ---- ::tkdroid:: must not shadow Tcl/Tk commands: scripts inside the namespace would call them ----
 foreach c [info commands ::tkdroid::*] {
     set t [namespace tail $c]

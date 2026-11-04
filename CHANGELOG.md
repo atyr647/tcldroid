@@ -4,6 +4,12 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.7.0
+- Platform services for Tcl scripts: `::tkdroid::pickfile`, `savefile`, `share`, `openurl`, `permission`,
+  `permitted`, `notify` ([device-api.md](docs/device-api.md)); a content provider shares files safely.
+- Tk's own dialogs, menus, `tk_popup` and grabs are tested on the backend (`tests/tk/dialogs.tcl`).
+- New example app `examples/services` that tries every service.
+
 ## 0.6.0
 - Runs Tk's own test suite (97 files, 9,742 tests) against the port: 86.7% pass, every failure triaged,
   0 crashes, 0 AddressSanitizer errors ([docs/tk-test-suite.md](docs/tk-test-suite.md)).

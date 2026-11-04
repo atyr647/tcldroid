@@ -71,6 +71,16 @@ final class TclRuntime {
 
         /** Device/app facts as "key TAB value LF" lines (UTF-8). */
         byte[] systemInfo();
+
+        /**
+         * Start an asynchronous platform service (kind: pickfile, savefile, share, openurl,
+         * permission, notify; args: "key TAB value LF" lines). Answer later with
+         * {@link TclRuntime#result}, from any thread. Called on the Tcl thread: return quickly.
+         */
+        void onRequest(int id, byte[] kind, byte[] args);
+
+        /** 1 if the Android permission is granted, else 0. */
+        int checkPermission(byte[] permission);
     }
 
     static final int LIFE_PAUSE = 0, LIFE_RESUME = 1, LIFE_LOWMEMORY = 2;
@@ -97,6 +107,8 @@ final class TclRuntime {
     private static native void nativeClipboardChanged();
 
     private static native void nativeLifecycle(int kind);
+
+    private static native void nativeResult(int id, byte[] status, byte[] payload);
 
     private static native void nativeLongPress(int x, int y);
 
@@ -132,6 +144,11 @@ final class TclRuntime {
     static void clipboardChanged() { nativeClipboardChanged(); }
 
     static void lifecycle(int kind) { nativeLifecycle(kind); }
+
+    /** Answer to Listener.onRequest. status: ok, error, cancelled or denied; payload: newline-separated items. */
+    static void result(int id, String status, String payload) {
+        nativeResult(id, b(status), b(payload == null ? "" : payload));
+    }
 
     static void longPress(int x, int y) { nativeLongPress(x, y); }
 

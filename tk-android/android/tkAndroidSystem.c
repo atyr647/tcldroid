@@ -196,9 +196,66 @@ InfoCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/*
+ * ::tkdroid::request kind ?key value ...?  -> id
+ * The primitive under the asynchronous services (file picker, share, permissions...): hands the
+ * request to the host and returns an id; the answer arrives later through ::tkdroid::native result
+ * and is routed to the -command that the Tcl wrappers in android.tcl registered. With no host
+ * (headless tests) the answer is an immediate "error".
+ */
+static int
+RequestCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    static int nextId = 1;
+    Tcl_DString args;
+    Tcl_Size i;
+    int id = nextId++;
+
+    (void) cd;
+    if (objc < 2 || (objc % 2) != 0) {
+	Tcl_WrongNumArgs(interp, 1, objv, "kind ?key value ...?");
+	return TCL_ERROR;
+    }
+    Tcl_DStringInit(&args);
+    for (i = 2; i < objc; i += 2) {
+	const char *k = Tcl_GetString(objv[i]), *v = Tcl_GetString(objv[i + 1]);
+
+	Tcl_DStringAppend(&args, k, TCL_INDEX_NONE);
+	Tcl_DStringAppend(&args, "\t", 1);
+	for (; *v != '\0'; v++) {		/* tabs and newlines would break the framing */
+	    Tcl_DStringAppend(&args, (*v == '\t' || *v == '\n') ? " " : v, 1);
+	}
+	Tcl_DStringAppend(&args, "\n", 1);
+    }
+    if (tkAHost.request != NULL) {
+	tkAHost.request(id, Tcl_GetString(objv[1]), Tcl_DStringValue(&args));
+    } else {
+	TkAQueueResult(id, "error", "no Android host");
+    }
+    Tcl_DStringFree(&args);
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(id));
+    return TCL_OK;
+}
+
+/* ::tkdroid::permitted permission -> 1/0 (is the Android permission granted?) */
+static int
+PermittedCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    (void) cd;
+    if (objc != 2) {
+	Tcl_WrongNumArgs(interp, 1, objv, "permission");
+	return TCL_ERROR;
+    }
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(tkAHost.checkPermission != NULL
+	    ? tkAHost.checkPermission(Tcl_GetString(objv[1])) : 0));
+    return TCL_OK;
+}
+
 int
 TkAInitSystemCommands(Tcl_Interp *interp)
 {
+    Tcl_CreateObjCommand2(interp, "::tkdroid::request", RequestCmd, NULL, NULL);
+    Tcl_CreateObjCommand2(interp, "::tkdroid::permitted", PermittedCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::vibrate", VibrateCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::haptic", HapticCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::sound", SoundCmd, NULL, NULL);

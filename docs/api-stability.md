@@ -11,7 +11,7 @@ exist for tests and may change at any time.
 | --- | --- |
 | Tcl 9.0 and Tk 9.0 commands and widgets, as upstream defines them (with the Android policies in [compatibility-policy.md](compatibility-policy.md)) | upstream manuals |
 | `tools/pack-app.sh` options and the app folder layout (`main.tcl`, `lib/`, `icon.png`, `icon-foreground.png`) | [packaging.md](packaging.md) |
-| `::tkdroid::vibrate`, `haptic`, `sound`, `device`, `ready` | [device-api.md](device-api.md) |
+| `::tkdroid::vibrate`, `haptic`, `sound`, `device`, `ready`, `pickfile`, `savefile`, `share`, `openurl`, `permission`, `permitted`, `notify` | [device-api.md](device-api.md) |
 | Virtual events `<<AndroidPause>>`, `<<AndroidSaveState>>`, `<<AndroidResume>>`, `<<AndroidLowMemory>>`, `<<LongPress>>`, `<<PinchStart>>`, `<<Pinch>>`, `<<PinchEnd>>` | device-api.md, [touch-and-clipboard.md](touch-and-clipboard.md) |
 | `::tkdroid::touchScroll` | touch-and-clipboard.md |
 | `$env(HOME)`, `$env(TMPDIR)`, `$::tkdroid::appdir` meanings | device-api.md |
@@ -23,6 +23,6 @@ exist for tests and may change at any time.
 
 ## Internal (tests only)
 
-`::tkdroid::snapshot`, `touch`, `key`, `screen`, `resize`, `stats`, `keyboard`, `hostclipboard`,
+`::tkdroid::request` (the primitive under the services), `::tkdroid::snapshot`, `touch`, `key`, `screen`, `resize`, `stats`, `keyboard`, `hostclipboard`,
 `tktestinit`, `::tkdroid::native`; the `TKDROID_SCREEN` and `TKDROID_DESKTOP_WM` environment variables;
 everything in `tkAndroid.h` (the host interface) until it is documented as a porting API.

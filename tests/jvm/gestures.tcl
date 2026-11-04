@@ -10,6 +10,19 @@ bind . <<Pinch>> {puts "PINCH update %d"}
 bind . <<PinchEnd>> {puts "PINCH end %d"}
 clipboard clear
 clipboard append "from tcl"
+# platform services: requests go to the host, answers come back later into the -command
+proc cb {name status results} {puts "RESULT $name $status [llength $results] [join $results |]"}
+::tkdroid::pickfile -types {image/png image/jpeg} -multiple 1 -command {cb pick}
+::tkdroid::openurl https://example.org/x -command {cb url}
+::tkdroid::permission request android.permission.CAMERA android.permission.VIBRATE -command {cb perm}
+::tkdroid::share -text "hello there" -title Send -command {cb share}
+set src [file join $::env(TMPDIR) save-src.txt]
+set fh [open $src w]; puts $fh notes; close $fh
+::tkdroid::savefile -source $src -name "my notes.txt" -type text/plain -command {cb save}
+puts "PERMITTED [::tkdroid::permitted android.permission.VIBRATE] [::tkdroid::permitted android.permission.CAMERA]"
+puts "ERR [catch {::tkdroid::pickfile} m] $m"
+puts "ERR [catch {::tkdroid::share} m] $m"
+puts "ERR [catch {::tkdroid::pickfile -bogus 1 -command x} m] $m"
 # device feedback, facts, fullscreen, lifecycle
 ::tkdroid::vibrate 30 128
 ::tkdroid::haptic confirm

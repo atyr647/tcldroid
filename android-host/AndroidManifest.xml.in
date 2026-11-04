@@ -10,6 +10,12 @@
         android:icon="@ICON@"
         android:allowBackup="@ALLOW_BACKUP@"
         android:theme="@style/AppTheme">
+        <!-- serves files the app chose to share (::tkdroid::share -file) -->
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

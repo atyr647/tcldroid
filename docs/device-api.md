@@ -20,6 +20,34 @@ feedback commands do nothing instead of failing, so scripts need no guards.
 Sound is for effects (a few seconds), not music streaming. A script that synthesises its sounds as
 WAV data (like Learn Tcl) writes them to `$env(TMPDIR)` once and plays the file.
 
+## Platform services: files, share, links, permissions, notifications
+
+These ask Android to do something, possibly with system UI, and answer **later**: your `-command` script is
+called with two more arguments, a **status** (`ok`, `cancelled`, `denied` or `error`) and a **list of results**.
+The app keeps running meanwhile.
+
+| Command | Results |
+| --- | --- |
+| `::tkdroid::pickfile -command cmd ?-types {image/png ...}? ?-multiple 1?` | local file paths. The system picker (any provider: Drive, Downloads, SD card...) is used; each chosen file is copied into the app's cache first, so ordinary `open`/`file` commands work on the results. |
+| `::tkdroid::savefile -source file -name name -command cmd ?-type mime?` | the saved name. The user picks the location; your file is copied there. |
+| `::tkdroid::share ?-text t? ?-file path? ?-type mime? ?-title t? ?-command cmd?` | none. Opens the system share sheet. (Android does not say whether the user finished.) |
+| `::tkdroid::openurl url ?-command cmd?` | none. `http`, `https`, `mailto`, `tel`, `geo`, `sms` only. |
+| `::tkdroid::permission request perm ?perm ...? -command cmd` | the granted permissions. The permission must also be declared in the app: `pack-app.sh --permission android.permission.CAMERA`. Status `denied` if any was refused. |
+| `::tkdroid::permitted perm` | `1` or `0` right now (synchronous). |
+| `::tkdroid::notify -title t -text t ?-command cmd?` | none. On Android 13+ declare and request `android.permission.POST_NOTIFICATIONS` first (status `denied` otherwise). |
+
+```tcl
+::tkdroid::pickfile -types {text/plain} -command {apply {{status files} {
+    if {$status eq "ok"} {set fh [open [lindex $files 0]]; .t insert end [read $fh]; close $fh}
+}}}
+```
+
+Tk's own dialogs also work (`tk_messageBox`, `tk_dialog`, `tk_chooseColor`, `tk_getOpenFile` inside the app's
+own storage, menus, `tk_popup`, grabs); use `pickfile`/`savefile` when the user should reach files outside the app.
+A request that makes no sense (nothing to share, an unreadable source file, an unknown option) is a Tcl error at
+once; everything that depends on the user or the system arrives through the callback. With no Android host
+(headless tests) every service answers `error`.
+
 ## Start-up screen
 
 The app shows its launch screen (`--splash '#RRGGBB'` and the app icon) until the first *complete*

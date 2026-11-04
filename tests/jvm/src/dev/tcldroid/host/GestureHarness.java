@@ -10,6 +10,13 @@ public class GestureHarness {
         Harness h = new Harness();
         if (!TclRuntime.start(new Context(), script, h, 1080, 2200, 420)) throw new RuntimeException("start failed");
         Thread.sleep(2500);
+        System.err.println("[java] --- platform services: answer the requests the script made");
+        TclRuntime.result(1, "ok", "/cache/picked/1/a.png\n/cache/picked/1/b b.png"); Thread.sleep(150);
+        TclRuntime.result(2, "error", "no app can open this link"); Thread.sleep(150);
+        TclRuntime.result(3, "denied", "android.permission.VIBRATE"); Thread.sleep(150);
+        TclRuntime.result(4, "ok", ""); Thread.sleep(150);
+        TclRuntime.result(5, "cancelled", ""); Thread.sleep(150);
+        TclRuntime.result(99, "ok", "nobody asked"); Thread.sleep(150);	// unknown id: ignored
         System.err.println("[java] --- tap Probe: Tk's own clipboard text must be on the system clipboard");
         tap(160, 450);
         System.err.println("[java] --- another app copies: Tk must see it");

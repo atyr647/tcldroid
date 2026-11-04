@@ -297,6 +297,48 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         }
     }
 
+    // ---- platform services (file picker, share, permissions, ...) ----------------------------------
+
+    private Services services;
+
+    private synchronized Services services() {
+        if (services == null) {
+            services = new Services(this);
+        }
+        return services;
+    }
+
+    @Override
+    public void onRequest(final int id, byte[] kind, byte[] args) {
+        final String k = path(kind);
+        final java.util.Map<String, String> a = Services.parse(args);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                services().handle(id, k, a);
+            }
+        });
+    }
+
+    @Override
+    public int checkPermission(byte[] permission) {
+        return services().check(path(permission));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        if (!services().onActivityResult(requestCode, resultCode, data)) {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (!services().onPermissionResult(requestCode, permissions, grantResults)) {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
     // ---- feedback: vibration, haptics, sound -------------------------------------------------
 
     private Sounds sounds;

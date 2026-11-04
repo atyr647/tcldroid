@@ -53,6 +53,12 @@ typedef struct TkAHost {
     void (*lifecycleDone)(int kind);
     /* Device and app facts as "key<TAB>value<LF>" lines, malloc'd (::tkdroid::device). */
     char *(*systemInfo)(void);
+    /* Asynchronous platform service (file picker, share, permissions, ...). The host starts the
+     * work and, when it finishes (any thread), calls TkAQueueResult with the same id. kind and
+     * args are NUL-terminated UTF-8; args is "key<TAB>value<LF>" lines. */
+    void (*request)(int id, const char *kind, const char *args);
+    /* Is the Android permission granted? 1 yes, 0 no. */
+    int (*checkPermission)(const char *permission);
 } TkAHost;
 
 enum { TKA_HAPTIC_TICK, TKA_HAPTIC_CLICK, TKA_HAPTIC_HEAVY, TKA_HAPTIC_CONFIRM, TKA_HAPTIC_REJECT };
@@ -111,6 +117,9 @@ void TkAQueuePinch(int phase, int x, int y, int scale1000);
 /* The Activity paused / resumed / is short of memory (TKA_LIFE_*): Tk generates
  * <<AndroidPause>> + <<AndroidSaveState>>, <<AndroidResume>>, <<AndroidLowMemory>> on ".". */
 void TkAQueueLifecycle(int kind);
+/* Answer to a host->request: status is "ok", "error", "cancelled" or "denied"; payload is text
+ * (newline-separated items). Thread-safe; strings are copied. */
+void TkAQueueResult(int id, const char *status, const char *payload);
 /* A choice from the text toolbar: TKA_MENU_CUT, _COPY, _PASTE or _SELECTALL. */
 void TkAQueueTextAction(int action);
 

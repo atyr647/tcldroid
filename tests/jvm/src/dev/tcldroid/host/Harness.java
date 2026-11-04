@@ -28,6 +28,12 @@ public class Harness implements TclRuntime.Listener {
     public void onBell() { System.err.println("[java] BELL"); }
     public void onLifecycleDone(int kind) { System.err.println("[java] LIFECYCLE done " + kind); }
     public byte[] systemInfo() { return "sdk\t35\nmodel\tHarness\nfilesDir\t/x y\n".getBytes(StandardCharsets.UTF_8); }
+    public volatile String lastRequest = "";
+    public void onRequest(int id, byte[] kind, byte[] args) {
+        lastRequest = id + " " + new String(kind, StandardCharsets.UTF_8);
+        System.err.println("[java] REQUEST " + id + " " + new String(kind, StandardCharsets.UTF_8) + " | " + new String(args, StandardCharsets.UTF_8).replace("\n", " ; ").replace("\t", "="));
+    }
+    public int checkPermission(byte[] p) { return new String(p, StandardCharsets.UTF_8).endsWith("VIBRATE") ? 1 : 0; }
     public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }
     void ppm(String path) throws IOException {
         try (OutputStream o = new BufferedOutputStream(new FileOutputStream(path))) {

@@ -257,6 +257,102 @@ proc ::tkdroid::Lifecycle {kind} {
     }
 }
 
+# ---- platform services (file picker, share, open a link, permissions, notifications) ----------------------
+#
+# Each asks Android to do something, possibly showing system UI, and reports back LATER: the -command
+# script is called with two more arguments, a status (ok, cancelled, denied or error) and a list of
+# results. The app keeps running meanwhile. Picked files are copied into the app's cache directory first,
+# so the results are ordinary file paths that any Tcl file command can read.
+#
+#   ::tkdroid::pickfile  -command cmd ?-types {mime ...}? ?-multiple 1?       results: local file paths
+#   ::tkdroid::savefile  -source file -name name -command cmd ?-type mime?     results: the saved name
+#   ::tkdroid::share     ?-text t? ?-file path? ?-type mime? ?-title t? ?-command cmd?
+#   ::tkdroid::openurl   url ?-command cmd?                           (http, https, mailto, tel, geo, sms)
+#   ::tkdroid::permission request perm ?perm ...? -command cmd         results: the granted permissions
+#   ::tkdroid::notify    -title t -text t ?-command cmd?
+#   ::tkdroid::permitted perm                                          1 if granted (synchronous)
+
+namespace eval ::tkdroid { variable pending; array set pending {} }
+
+proc ::tkdroid::async {kind opts cmd} {
+    variable pending
+    set id [request $kind {*}$opts]
+    if {$cmd ne ""} {set pending($id) $cmd}
+    return $id
+}
+
+proc ::tkdroid::Result {id status payload} {
+    variable pending
+    if {![info exists pending($id)]} return
+    set cmd $pending($id)
+    unset pending($id)
+    set results [expr {$payload eq "" ? {} : [split $payload \n]}]
+    uplevel #0 [list {*}$cmd $status $results]
+}
+
+# split "-opt value ..." into a dict, rejecting unknown options
+proc ::tkdroid::options {optlist allowed} {
+    set d [dict create]
+    foreach {k v} $optlist {
+	if {$k ni $allowed} {error "bad option \"$k\": must be [join $allowed {, }]"}
+	dict set d [string range $k 1 end] $v
+    }
+    return $d
+}
+
+proc ::tkdroid::pickfile {args} {
+    set o [options {*}[list $args {-command -types -multiple}]]
+    if {![dict exists $o command]} {error "pickfile needs -command"}
+    set a {}
+    if {[dict exists $o types]} {lappend a types [join [dict get $o types] ,]}
+    if {[dict exists $o multiple]} {lappend a multiple [expr {[dict get $o multiple] ? 1 : 0}]}
+    async pickfile $a [dict get $o command]
+}
+
+proc ::tkdroid::savefile {args} {
+    set o [options {*}[list $args {-command -source -name -type}]]
+    foreach need {command source name} {if {![dict exists $o $need]} {error "savefile needs -$need"}}
+    if {![file readable [dict get $o source]]} {error "cannot read [dict get $o source]"}
+    set a [list source [file normalize [dict get $o source]] name [dict get $o name]]
+    if {[dict exists $o type]} {lappend a type [dict get $o type]}
+    async savefile $a [dict get $o command]
+}
+
+proc ::tkdroid::share {args} {
+    set o [options {*}[list $args {-text -file -type -title -command}]]
+    if {![dict exists $o text] && ![dict exists $o file]} {error "share needs -text or -file"}
+    set a {}
+    foreach k {text type title} {if {[dict exists $o $k]} {lappend a $k [dict get $o $k]}}
+    if {[dict exists $o file]} {
+	if {![file readable [dict get $o file]]} {error "cannot read [dict get $o file]"}
+	lappend a file [file normalize [dict get $o file]]
+    }
+    async share $a [expr {[dict exists $o command] ? [dict get $o command] : ""}]
+}
+
+proc ::tkdroid::openurl {url args} {
+    set o [options {*}[list $args {-command}]]
+    async openurl [list url $url] [expr {[dict exists $o command] ? [dict get $o command] : ""}]
+}
+
+proc ::tkdroid::permission {sub args} {
+    if {$sub ne "request"} {error "bad subcommand \"$sub\": must be request"}
+    set perms {}
+    set cmd ""
+    while {[llength $args]} {
+	set a [lindex $args 0]
+	if {$a eq "-command"} {set cmd [lindex $args 1]; set args [lrange $args 2 end]} else {lappend perms $a; set args [lrange $args 1 end]}
+    }
+    if {![llength $perms] || $cmd eq ""} {error "usage: permission request perm ?perm ...? -command cmd"}
+    async permission [list permissions [join $perms ,]] $cmd
+}
+
+proc ::tkdroid::notify {args} {
+    set o [options {*}[list $args {-title -text -command}]]
+    foreach need {title text} {if {![dict exists $o $need]} {error "notify needs -$need"}}
+    async notify [list title [dict get $o title] text [dict get $o text]] [expr {[dict exists $o command] ? [dict get $o command] : ""}]
+}
+
 # ---- entry point for the platform layer ------------------------------------------------------
 
 proc ::tkdroid::native {kind a b c d} {
@@ -265,6 +361,7 @@ proc ::tkdroid::native {kind a b c d} {
 	pinch { Pinch $a $b $c $d }
 	textaction { TextAction $a }
 	lifecycle { Lifecycle $a }
+	result { Result $a $b $c }
     }
 }
 
