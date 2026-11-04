@@ -12,8 +12,10 @@ The Tk `android/` platform tree (docs/adr/0002-tk-backend-architecture.md). Copi
 | `tkAndroidEvent.c` | Tcl event source, touch/key/back queues, focus, pointer, keysyms, `tkdroid::` test hooks. |
 | `tkAndroidWm.c` | Window manager (`.` fills the screen, other toplevels are layers; Back; `wm` subcommands). |
 | `tkAndroidFont.c`, `tkAndroidTestEngine.c` | Fonts on a pluggable text engine; FreeType (host tests) and a box-glyph fallback. |
-| `tkAndroidColor.c`, `tkAndroidDisplay.c` | Colours, cursors, selection stubs; display, init, library mount, trivia. |
+| `tkAndroidColor.c`, `tkAndroidDisplay.c` | Colours, cursors, property stubs; display, init, library mount, trivia. |
+| `tkAndroidSelect.c` | Selection and clipboard (system clipboard through the host). |
+| `../library/android.tcl` | Touch policy in Tcl: drag-scroll, long-press selection and toolbar, pinch (see docs/touch-and-clipboard.md). |
 
 Build: `tools/build-tk.sh host` (fast loop: FreeType text, `TKDROID_SCREEN=1080x2200@420`) or `tools/build-tk.sh arm64-v8a|x86_64`.
 Test hooks (Tcl): `::tkdroid::snapshot file.ppm`, `touch down|up|move x y`, `key down|up name`, `screen`, `resize w h`.
-Not implemented yet: selection/clipboard, menus' platform side, `tk busy`, rotated text, IME composition, multi-touch. See docs/tk-android-work-list.md for the original work list (all 195 functions are now implemented; some, like selection, are placeholders).
+Not implemented yet: menus' platform side, `tk busy`, rotated text, IME composition, selection handles. See docs/tk-android-work-list.md for the original work list (all 195 functions are now implemented; some, like selection, are placeholders).

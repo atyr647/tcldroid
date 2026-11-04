@@ -118,24 +118,11 @@ TkCreateCursorFromData(Tk_Window tkwin, const char *source, const char *mask,
     return NewCursor();
 }
 
-void TkpFreeCursor(TkCursor *cursorPtr) { ckfree(cursorPtr); }
+/* Platform resources only: generic/tkCursor.c frees the TkCursor record itself. */
+void TkpFreeCursor(TkCursor *cursorPtr) { (void) cursorPtr; }
 int XFreeCursor(Display *d, Cursor c) { (void) d; (void) c; return 1; }
 
-/* ---- selection, clipboard and properties: not yet implemented -------------------------- */
-
-void TkClipCleanup(TkDisplay *dispPtr) { (void) dispPtr; }
-void TkSelEventProc(Tk_Window tkwin, XEvent *ev) { (void) tkwin; (void) ev; }
-void TkSelPropProc(XEvent *ev) { (void) ev; }
-void TkSelUpdateClipboard(TkWindow *winPtr, clipboardOption opt) { (void) winPtr; (void) opt; }
-
-int
-TkSelGetSelection(Tcl_Interp *interp, Tk_Window tkwin, Atom selection, Atom target,
-	Tk_GetSelProc *proc, void *clientData)
-{
-    (void) tkwin; (void) selection; (void) target; (void) proc; (void) clientData;
-    Tcl_SetObjResult(interp, Tcl_NewStringObj("selection is not yet implemented on Android", TCL_AUTO_LENGTH));
-    return TCL_ERROR;
-}
+/* ---- selection owner and window properties (the clipboard itself is tkAndroidSelect.c) -------------------------- */
 
 int XSetSelectionOwner(Display *d, Atom a, Window w, Time t) { (void) d; (void) a; (void) w; (void) t; return 1; }
 int XChangeProperty(Display *d, Window w, Atom a1, Atom a2, int i1, int i2, const unsigned char *c, int i3)

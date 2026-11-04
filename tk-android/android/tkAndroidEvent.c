@@ -16,7 +16,8 @@
 
 /* ---- the UI-thread -> Tcl-thread queue ------------------------------------------- */
 
-enum { REC_TOUCH = 1, REC_KEY = 2, REC_BACK = 3, REC_RESIZE = 4 };
+enum { REC_TOUCH = 1, REC_KEY = 2, REC_BACK = 3, REC_RESIZE = 4, REC_CLIP = 5, REC_LONG = 6,
+    REC_PINCH = 7, REC_ACTION = 8 };
 
 typedef struct Rec {
     int kind;
@@ -131,6 +132,38 @@ void
 TkAQueueResize(int w, int h, int dpi)
 {
     Rec r = {REC_RESIZE, w, h, dpi, 0};
+
+    Push(r);
+}
+
+void
+TkAQueueClipboardChanged(void)
+{
+    Rec r = {REC_CLIP, 0, 0, 0, 0};
+
+    Push(r);
+}
+
+void
+TkAQueueLongPress(int x, int y)
+{
+    Rec r = {REC_LONG, x, y, 0, 0};
+
+    Push(r);
+}
+
+void
+TkAQueuePinch(int phase, int x, int y, int scale1000)
+{
+    Rec r = {REC_PINCH, phase, x, y, scale1000};
+
+    Push(r);
+}
+
+void
+TkAQueueTextAction(int action)
+{
+    Rec r = {REC_ACTION, action, 0, 0, 0};
 
     Push(r);
 }
@@ -342,42 +375,84 @@ UpdateKeyboard(void)
     }
 }
 
+/*
+ * Gesture policy lives in Tcl (library/android.tcl): the native side only reports what
+ * the platform saw. Calls ::tkdroid::native kind a b c d; a script error goes to
+ * bgerror like any other event-handler error. Silently ignored if the policy script
+ * is not loaded.
+ */
+static void
+CallScript(const char *kind, int a, int b, int c, int d)
+{
+    TkMainInfo *mainInfo = TkGetMainInfoList();
+    Tcl_Interp *interp = mainInfo != NULL ? mainInfo->interp : NULL;
+    Tcl_Obj *argv[6];
+    int i;
+
+    if (interp == NULL || Tcl_FindCommand(interp, "::tkdroid::native", NULL, TCL_GLOBAL_ONLY) == NULL) {
+	return;
+    }
+    argv[0] = Tcl_NewStringObj("::tkdroid::native", TCL_AUTO_LENGTH);
+    argv[1] = Tcl_NewStringObj(kind, TCL_AUTO_LENGTH);
+    argv[2] = Tcl_NewIntObj(a);
+    argv[3] = Tcl_NewIntObj(b);
+    argv[4] = Tcl_NewIntObj(c);
+    argv[5] = Tcl_NewIntObj(d);
+    for (i = 0; i < 6; i++) {
+	Tcl_IncrRefCount(argv[i]);
+    }
+    Tcl_Preserve(interp);
+    if (Tcl_EvalObjv(interp, 6, argv, TCL_EVAL_GLOBAL) != TCL_OK) {
+	Tcl_BackgroundException(interp, TCL_ERROR);
+    }
+    Tcl_Release(interp);
+    for (i = 0; i < 6; i++) {
+	Tcl_DecrRefCount(argv[i]);
+    }
+}
+
 static void
 ProcessTouch(const Rec *r)
 {
+    /*
+     * Like the Windows port: tell Tk_UpdatePointer which window the pointer is really
+     * over, even while a button is down. Tk's own pointer module (generic/tkPointer.c)
+     * then applies the implicit grab, so a finger that slides off a button leaves it
+     * (and lifting there does not click), exactly as with a mouse.
+     */
     TkADrawable *d = TkAWindowAt(r->b, r->c);
-    TkWindow *w = captureWin;
-    int state;
+    TkWindow *w = NULL;
+    int state, x = r->b, y = r->c;
 
     while (w == NULL && d != NULL) {
 	w = d->winPtr;
 	d = d->parent;
     }
-    if (w == NULL) {
-	return;
-    }
     if (r->a == 0) {		/* finger down: decide what the keyboard should do */
-	TkADrawable *hit = TkAWindowAt(r->b, r->c);
-	TkWindow *under = NULL;
-
-	while (under == NULL && hit != NULL) {
-	    under = hit->winPtr;
-	    hit = hit->parent;
-	}
-	if (IsTextWidget(under)) {
+	if (IsTextWidget(w)) {
 	    kbRequested = 1;
 	} else if (kbRequested) {
 	    kbRequested = 0;
-	    if (kbShown && under != NULL) {
-		TkSetFocusWin(TopOf(under), 0);	/* the caret goes away with the keyboard */
+	    if (kbShown && w != NULL) {
+		TkSetFocusWin(TopOf(w), 0);	/* the caret goes away with the keyboard */
 	    }
 	}
     }
-    tkA.ptrX = r->b;
-    tkA.ptrY = r->c;
+    if (r->a == 3) {
+	/* Cancelled (system gesture, a second finger, ...): the pointer leaves every
+	 * window before the button is released, so no widget treats it as a click. */
+	x = y = -30000;
+	w = NULL;
+	tkA.ptrX = tkA.ptrY = x;
+	Tk_UpdatePointer(NULL, x, y, Button1Mask);
+	Tk_UpdatePointer(NULL, x, y, 0);
+	return;
+    }
+    tkA.ptrX = x;
+    tkA.ptrY = y;
     state = (r->a == 0 || r->a == 2) ? Button1Mask : 0;
     tkA.ptrState = state;
-    Tk_UpdatePointer((Tk_Window) w, r->b, r->c, state);
+    Tk_UpdatePointer((Tk_Window) w, x, y, state);
 }
 
 static void
@@ -447,6 +522,18 @@ CheckProc(void *cd, int flags)
 	    break;
 	case REC_RESIZE:
 	    TkAndroidResize(r.a, r.b, (double) r.c);
+	    break;
+	case REC_CLIP:
+	    TkAClipboardChanged();
+	    break;
+	case REC_LONG:
+	    CallScript("longpress", r.a, r.b, 0, 0);
+	    break;
+	case REC_PINCH:
+	    CallScript("pinch", r.a, r.b, r.c, r.d);
+	    break;
+	case REC_ACTION:
+	    CallScript("textaction", r.a, 0, 0, 0);
 	    break;
 	}
     }
@@ -847,9 +934,30 @@ KeyboardCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/* ::tkdroid::textmenu x y flags -- show the native Cut/Copy/Paste/Select all toolbar. */
+static int
+TextMenuCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    int x, y, flags;
+
+    (void) cd;
+    if (objc != 4 || Tcl_GetIntFromObj(interp, objv[1], &x) != TCL_OK
+	    || Tcl_GetIntFromObj(interp, objv[2], &y) != TCL_OK
+	    || Tcl_GetIntFromObj(interp, objv[3], &flags) != TCL_OK) {
+	Tcl_WrongNumArgs(interp, 1, objv, "x y flags");
+	return TCL_ERROR;
+    }
+    if (tkAHost.textMenu != NULL) {
+	tkAHost.textMenu(x, y, flags);
+    }
+    return TCL_OK;
+}
+
 int
 TkAInitCommands(Tcl_Interp *interp)
 {
+    Tcl_CreateObjCommand2(interp, "::tkdroid::textmenu", TextMenuCmd, NULL, NULL);
+    Tcl_CreateObjCommand2(interp, "::tkdroid::hostclipboard", TkAClipboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::keyboard", KeyboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::stats", StatsCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::snapshot", SnapshotCmd, NULL, NULL);

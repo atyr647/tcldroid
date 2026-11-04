@@ -7,8 +7,8 @@
 #   APP_DIR      folder with main.tcl (+ files, optional icon.png)   default examples/demo
 #   APP_NAME     launcher label                                      default "Tcl Host"
 #   APP_ID       Android applicationId                               default dev.tcldroid.host
-#   APP_VERSION  versionName                                         default 0.3.0
-#   APP_CODE     versionCode                                         default 8
+#   APP_VERSION  versionName                                         default 0.4.0
+#   APP_CODE     versionCode                                         default 9
 . "$(dirname "$0")/env.sh"
 
 # Build Tcl only if a library is missing (set FORCE_TCL=1 to rebuild).
@@ -40,8 +40,8 @@ PROPS
 APP_DIR=${APP_DIR:-$TCLDROID_ROOT/examples/demo}
 APP_NAME=${APP_NAME:-Tcl Host}
 APP_ID=${APP_ID:-dev.tcldroid.host}
-APP_VERSION=${APP_VERSION:-0.3.0}
-APP_CODE=${APP_CODE:-8}
+APP_VERSION=${APP_VERSION:-0.4.0}
+APP_CODE=${APP_CODE:-9}
 APP_DIR=$(cd "$APP_DIR" && pwd) || die "APP_DIR not found"
 [ -f "$APP_DIR/main.tcl" ] || die "$APP_DIR/main.tcl not found"
 STAGE="$BUILD_DIR/app-stage"

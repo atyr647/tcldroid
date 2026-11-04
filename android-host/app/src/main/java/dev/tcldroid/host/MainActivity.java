@@ -65,6 +65,7 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
             }
         });
         setContentView(root);
+        clipboard().addPrimaryClipChangedListener(clipListener);
         root.requestApplyInsets();
         reportPreviousFailure();
     }
@@ -116,6 +117,7 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        clipboard().removePrimaryClipChangedListener(clipListener);
         if (isFinishing()) {
             // A Tcl interpreter cannot be restarted inside a live process. Leave a marker so the
             // next launch knows this kill was deliberate and does not report it as a crash.
@@ -191,6 +193,67 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     @Override
     public void onCaret(int x, int y, int height) {
         // The IME cursor position is not used yet.
+    }
+
+    @Override
+    public byte[] getClipboard() {
+        try {
+            ClipData clip = clipboard().getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) {
+                return null;
+            }
+            CharSequence text = clip.getItemAt(0).coerceToText(this);
+            return text == null ? null : text.toString().getBytes(StandardCharsets.UTF_8);
+        } catch (RuntimeException e) {	// e.g. SecurityException when not in the foreground
+            Log.w(TAG, "cannot read the clipboard", e);
+            return null;
+        }
+    }
+
+    @Override
+    public void setClipboard(byte[] utf8) {
+        try {
+            if (utf8 == null) {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    clipboard().clearPrimaryClip();
+                } else {
+                    clipboard().setPrimaryClip(ClipData.newPlainText("", ""));
+                }
+            } else {
+                clipboard().setPrimaryClip(
+                        ClipData.newPlainText("Tk", new String(utf8, StandardCharsets.UTF_8)));
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "cannot write the clipboard", e);
+        }
+    }
+
+    @Override
+    public void onTextMenu(final int x, final int y, final int flags) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                tkView.showTextMenu(x, y, flags);
+            }
+        });
+    }
+
+    private ClipboardManager clipboard() {
+        return (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+    }
+
+    private final ClipboardManager.OnPrimaryClipChangedListener clipListener =
+            new ClipboardManager.OnPrimaryClipChangedListener() {
+                @Override
+                public void onPrimaryClipChanged() {
+                    TclRuntime.clipboardChanged();
+                }
+            };
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        TclRuntime.clipboardChanged();	// it may have changed while we were away
     }
 
     @Override

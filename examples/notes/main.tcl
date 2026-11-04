@@ -24,18 +24,6 @@ text .t -wrap word -relief sunken -borderwidth 2 -background white -undo 1 \
     -padx 8 -pady 8 -font [list TkTextFont 14]
 pack .t -side top -fill both -expand 1 -padx 12 -pady 4
 
-# Touch-scroll: dragging vertically over the text scrolls it (taps still place the caret).
-bind .t <ButtonPress-1> {set ::ty %y; set ::moved 0}
-bind .t <B1-Motion> {
-    set d [expr {$::ty - %y}]
-    if {abs($d) > 12 || $::moved} {
-        set ::moved 1
-        .t yview scroll [expr {$d / 20}] units
-        if {abs($d) >= 20} {set ::ty %y}
-        break
-    }
-}
-
 proc save {} {
     global file status
     set fh [open $file w]

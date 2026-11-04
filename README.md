@@ -23,6 +23,8 @@ The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Pha
 
 `tools/pack-app.sh myapp-folder --name "My App"` produces an installable APK; see [docs/packaging.md](docs/packaging.md).
 
+Touch, text selection, the system clipboard and gestures: [docs/touch-and-clipboard.md](docs/touch-and-clipboard.md).
+
 ## Build (headless Tcl for Android — Milestone M0)
 
 Requirements on the build machine (Linux x86_64): `bash`, `curl`, `unzip`, `tar`, `make`, a native C compiler, `sha1sum`/`sha256sum`. Nothing else: the script downloads and verifies the pinned NDK.

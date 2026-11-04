@@ -15,6 +15,10 @@ public class Harness implements TclRuntime.Listener {
     public void onBack() { System.err.println("[java] onBack (unhandled)"); }
     public void onMoveToBack() { }
     public void onKeyboard(boolean show) { System.err.println("[java] KEYBOARD " + (show ? "SHOW" : "HIDE")); }
+    String clip = null;
+    public byte[] getClipboard() { return clip == null ? null : clip.getBytes(StandardCharsets.UTF_8); }
+    public void setClipboard(byte[] b) { clip = b == null ? null : new String(b, StandardCharsets.UTF_8); System.err.println("[java] clipboard <- " + clip); }
+    public void onTextMenu(int x, int y, int flags) { System.err.println("[java] TEXTMENU " + x + "," + y + " flags=" + flags); }
     public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }
     void ppm(String path) throws IOException {
         try (OutputStream o = new BufferedOutputStream(new FileOutputStream(path))) {

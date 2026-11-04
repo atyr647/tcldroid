@@ -3,9 +3,16 @@ package dev.tcldroid.host;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.text.InputType;
+import android.view.ActionMode;
+import android.view.GestureDetector;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
@@ -34,10 +41,107 @@ final class TkView extends View {
     private int frameW, frameH;
     private SizeListener sizeListener;
 
+    // Gestures (see tk-android/library/android.tcl for what Tk does with them).
+    private final GestureDetector longPress;
+    private final ScaleGestureDetector pinch;
+    private boolean multiTouch;		// two or more fingers down: Tk's pointer is not used
+    private float pinchScale = 1f;
+    private ActionMode textMenu;
+    private int menuX, menuY, menuFlags;
+
     TkView(Context context) {
         super(context);
         setFocusable(true);
         setFocusableInTouchMode(true);
+        longPress = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public void onLongPress(MotionEvent e) {
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                TclRuntime.longPress((int) e.getX(), (int) e.getY());
+            }
+        });
+        pinch = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScaleBegin(ScaleGestureDetector d) {
+                pinchScale = 1f;
+                TclRuntime.pinch(0, (int) d.getFocusX(), (int) d.getFocusY(), 1f);
+                return true;
+            }
+
+            @Override
+            public boolean onScale(ScaleGestureDetector d) {
+                pinchScale *= d.getScaleFactor();
+                TclRuntime.pinch(1, (int) d.getFocusX(), (int) d.getFocusY(), pinchScale);
+                return true;
+            }
+
+            @Override
+            public void onScaleEnd(ScaleGestureDetector d) {
+                TclRuntime.pinch(2, (int) d.getFocusX(), (int) d.getFocusY(), pinchScale);
+            }
+        });
+        pinch.setQuickScaleEnabled(false);
+    }
+
+    // ---- the text-editing toolbar (Cut / Copy / Paste / Select all) -----------------------
+
+    /** Show the platform's floating text toolbar near (x, y); UI thread. */
+    void showTextMenu(int x, int y, int flags) {
+        menuX = x;
+        menuY = y;
+        menuFlags = flags;
+        if (textMenu != null) {
+            textMenu.finish();
+        }
+        textMenu = startActionMode(new ActionMode.Callback2() {
+            @Override
+            public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                if ((menuFlags & TclRuntime.MENU_CUT) != 0) {
+                    menu.add(0, TclRuntime.MENU_CUT, 0, android.R.string.cut);
+                }
+                if ((menuFlags & TclRuntime.MENU_COPY) != 0) {
+                    menu.add(0, TclRuntime.MENU_COPY, 1, android.R.string.copy);
+                }
+                if ((menuFlags & TclRuntime.MENU_PASTE) != 0) {
+                    menu.add(0, TclRuntime.MENU_PASTE, 2, android.R.string.paste);
+                }
+                if ((menuFlags & TclRuntime.MENU_SELECT_ALL) != 0) {
+                    menu.add(0, TclRuntime.MENU_SELECT_ALL, 3, android.R.string.selectAll);
+                }
+                return menu.size() > 0;
+            }
+
+            @Override
+            public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                return false;
+            }
+
+            @Override
+            public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                TclRuntime.textAction(item.getItemId());
+                mode.finish();
+                return true;
+            }
+
+            @Override
+            public void onDestroyActionMode(ActionMode mode) {
+                if (textMenu == mode) {
+                    textMenu = null;
+                }
+            }
+
+            @Override
+            public void onGetContentRect(ActionMode mode, View view, Rect outRect) {
+                int r = (int) (24 * getResources().getDisplayMetrics().density);
+                outRect.set(menuX - r, menuY - 2 * r, menuX + r, menuY);
+            }
+        }, ActionMode.TYPE_FLOATING);
+    }
+
+    void hideTextMenu() {
+        if (textMenu != null) {
+            textMenu.finish();
+        }
     }
 
     void setSizeListener(SizeListener l) {
@@ -118,8 +222,27 @@ final class TkView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        int masked = e.getActionMasked();
+        if (masked == MotionEvent.ACTION_DOWN && textMenu != null) {
+            textMenu.finish();		// touching anything else dismisses the toolbar
+        }
+        longPress.onTouchEvent(e);
+        pinch.onTouchEvent(e);
+        if (masked == MotionEvent.ACTION_POINTER_DOWN && !multiTouch) {
+            // A second finger: take the first one away from Tk (a cancel, not a click)
+            // and report only pinch gestures until every finger is up.
+            multiTouch = true;
+            TclRuntime.touch(3, (int) e.getX(0), (int) e.getY(0));
+            return true;
+        }
+        if (multiTouch) {
+            if (masked == MotionEvent.ACTION_UP || masked == MotionEvent.ACTION_CANCEL) {
+                multiTouch = false;
+            }
+            return true;
+        }
         int action;
-        switch (e.getActionMasked()) {
+        switch (masked) {
             case MotionEvent.ACTION_DOWN: action = 0; break;
             case MotionEvent.ACTION_UP: action = 1; break;
             case MotionEvent.ACTION_MOVE: action = 2; break;

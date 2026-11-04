@@ -34,7 +34,20 @@ typedef struct TkAHost {
     void (*moveToBack)(void);		/* `wm iconify .` */
     void (*caret)(int x, int y, int height);	/* text caret moved (IME cursor position) */
     void (*keyboard)(int show);		/* show or hide the soft keyboard */
+    /* System clipboard (text only). getClipboard returns malloc'd UTF-8, or NULL if
+     * it holds no text; setClipboard(NULL) empties it. Either may be NULL: Tk then keeps
+     * a private in-process clipboard (headless tests). */
+    char *(*getClipboard)(void);
+    void (*setClipboard)(const char *utf8);
+    /* Show the native text-editing toolbar (Cut/Copy/Paste/Select all) near (x, y) in
+     * screen pixels. flags: TKA_MENU_* bits. */
+    void (*textMenu)(int x, int y, int flags);
 } TkAHost;
+
+#define TKA_MENU_CUT 1
+#define TKA_MENU_COPY 2
+#define TKA_MENU_PASTE 4
+#define TKA_MENU_SELECTALL 8
 
 extern TkAHost tkAHost;
 void TkAndroidSetHost(const TkAHost *host);
@@ -74,6 +87,15 @@ void TkAQueueTouch(int action, int x, int y);
 void TkAQueueKey(int down, int keysym, int unicode, int state);
 void TkAQueueBack(void);
 void TkAQueueResize(int w, int h, int dpi);
+/* The system clipboard changed (in any app, including ours). */
+void TkAQueueClipboardChanged(void);
+/* The finger has stayed down in place (x, y) long enough: a long press. */
+void TkAQueueLongPress(int x, int y);
+/* Two-finger pinch. phase: 0 start, 1 update, 2 end; (x, y) the focal point; scale1000 the
+ * cumulative scale since the start, times 1000. */
+void TkAQueuePinch(int phase, int x, int y, int scale1000);
+/* A choice from the text toolbar: TKA_MENU_CUT, _COPY, _PASTE or _SELECTALL. */
+void TkAQueueTextAction(int action);
 
 #ifdef __cplusplus
 }

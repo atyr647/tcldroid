@@ -297,6 +297,11 @@ XDestroyWindow(Display *display, Window w)
     }
     p = d->parent;
     area = RectOf(d);
+    if (d->winPtr != NULL) {
+	/* Forget it in the pointer module (last-entered window, grab, capture), as the
+	 * Windows and macOS ports do, or the next touch would use a dead window. */
+	TkPointerDeadWindow(d->winPtr);
+    }
     Destroy(d);
     if (p != NULL) {
 	ExposeRootArea(p, area);

@@ -37,7 +37,7 @@
 static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
-	gOnMoveToBack, gOnCaret, gOnKeyboard;
+	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -174,7 +174,52 @@ Keyboard(int show)
     Check(e);
 }
 
-static const TkAHost host = {Present, SetTitle, NULL, BackUnhandled, MoveToBack, Caret, Keyboard};
+/* Returns malloc'd UTF-8, or NULL when the clipboard holds no text. */
+static char *
+GetClipboard(void)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = (jbyteArray) (*e)->CallObjectMethod(e, gListener, gGetClip);
+    char *s = NULL;
+
+    Check(e);
+    if (a != NULL) {
+	jsize n = (*e)->GetArrayLength(e, a);
+
+	s = malloc((size_t) n + 1);
+	if (s != NULL) {
+	    (*e)->GetByteArrayRegion(e, a, 0, n, (jbyte *) s);
+	    s[n] = '\0';
+	}
+	(*e)->DeleteLocalRef(e, a);
+    }
+    return s;
+}
+
+static void
+SetClipboard(const char *utf8)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = utf8 != NULL ? ToByteArray(e, utf8, (jsize) strlen(utf8)) : NULL;
+
+    (*e)->CallVoidMethod(e, gListener, gSetClip, a);
+    if (a != NULL) {
+	(*e)->DeleteLocalRef(e, a);
+    }
+    Check(e);
+}
+
+static void
+TextMenu(int x, int y, int flags)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gTextMenu, x, y, flags);
+    Check(e);
+}
+
+static const TkAHost host = {Present, SetTitle, NULL, BackUnhandled, MoveToBack, Caret, Keyboard,
+	GetClipboard, SetClipboard, TextMenu};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -389,6 +434,9 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gOnMoveToBack = (*env)->GetMethodID(env, lc, "onMoveToBack", "()V");
     gOnCaret = (*env)->GetMethodID(env, lc, "onCaret", "(III)V");
     gOnKeyboard = (*env)->GetMethodID(env, lc, "onKeyboard", "(Z)V");
+    gGetClip = (*env)->GetMethodID(env, lc, "getClipboard", "()[B");
+    gSetClip = (*env)->GetMethodID(env, lc, "setClipboard", "([B)V");
+    gTextMenu = (*env)->GetMethodID(env, lc, "onTextMenu", "(III)V");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {
 	return JNI_FALSE;	/* NoClassDefFoundError is pending */
@@ -460,4 +508,33 @@ Java_dev_tcldroid_host_TclRuntime_nativeResize(JNIEnv *env, jclass clazz, jint w
 {
     (void) env; (void) clazz;
     TkAQueueResize(w, h, dpi);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeClipboardChanged(JNIEnv *env, jclass clazz)
+{
+    (void) env; (void) clazz;
+    TkAQueueClipboardChanged();
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeLongPress(JNIEnv *env, jclass clazz, jint x, jint y)
+{
+    (void) env; (void) clazz;
+    TkAQueueLongPress(x, y);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativePinch(JNIEnv *env, jclass clazz, jint phase, jint x,
+	jint y, jint scale1000)
+{
+    (void) env; (void) clazz;
+    TkAQueuePinch(phase, x, y, scale1000);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeTextAction(JNIEnv *env, jclass clazz, jint action)
+{
+    (void) env; (void) clazz;
+    TkAQueueTextAction(action);
 }

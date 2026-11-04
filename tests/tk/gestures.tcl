@@ -1,0 +1,181 @@
+# Host-side checks of clipboard, touch scrolling, long-press selection and pinch.
+# Run with tests/tk-host.sh (a host build of Tk with the Android platform layer).
+load $::env(TKLIB) Tk
+set fails 0
+proc check {name cond} {
+    global fails
+    if {[uplevel 1 [list expr $cond]]} {puts "PASS $name"} else {puts "FAIL $name"; incr fails}
+}
+proc tap {x y} {::tkdroid::touch down $x $y; update; ::tkdroid::touch up $x $y; update}
+proc drag {x y0 y1 {steps 8}} {
+    ::tkdroid::touch down $x $y0; update
+    for {set i 1} {$i <= $steps} {incr i} {
+	::tkdroid::touch move $x [expr {$y0 + ($y1-$y0)*$i/$steps}]; update
+    }
+}
+proc native {args} {::tkdroid::native {*}$args; update}
+
+# ---- clipboard ------------------------------------------------------------------------
+entry .e -width 30
+pack .e -fill x
+.e insert end "alpha beta gamma"
+update
+clipboard clear
+clipboard append "from tk"
+check clip-roundtrip {[clipboard get] eq "from tk"}
+check clip-system {[::tkdroid::hostclipboard] eq "from tk"}
+.e selection range 0 5
+event generate .e <<Copy>>
+check clip-copy-widget {[::tkdroid::hostclipboard] eq "alpha"}
+::tkdroid::hostclipboard "other app text"
+update
+check clip-external-seen {[clipboard get] eq "other app text"}
+check clip-ownership-dropped {![catch {selection own -selection CLIPBOARD} o] && $o eq ""}
+.e delete 0 end
+.e icursor 0
+event generate .e <<Paste>>
+check clip-paste-widget {[.e get] eq "other app text"}
+clipboard clear
+clipboard append "x"
+check clip-reclaim {[clipboard get] eq "x" && [::tkdroid::hostclipboard] eq "x"}
+check clip-get-bad-type {[catch {clipboard get -type NOSUCH}]}
+destroy .e
+
+# ---- touch scrolling in a text widget ----------------------------------------------------
+text .t -width 30 -height 10 -wrap none
+pack .t -fill both -expand 1
+for {set i 1} {$i <= 300} {incr i} {.t insert end "line $i some words in a line\n"}
+.t mark set insert 1.0
+update
+set rx [winfo rootx .t]; set ry [winfo rooty .t]
+set x [expr {$rx + 50}]; set y0 [expr {$ry + 150}]
+drag $x $y0 [expr {$y0 - 120}]
+::tkdroid::touch up $x [expr {$y0 - 120}]; update
+set v [lindex [.t yview] 0]
+check drag-scrolls {$v > 0.0}
+check drag-keeps-caret {[.t index insert] eq "1.0"}
+check drag-no-selection {[llength [.t tag ranges sel]] == 0}
+after 200 {set done 1}; vwait done
+set v2 [lindex [.t yview] 0]
+check fling-continues {$v2 >= $v}
+after 1500 {set done 1}; vwait done	;# let the momentum die out
+# a tap places the caret (and focuses)
+.t yview moveto 0; update
+tap [expr {$rx + 40}] [expr {$ry + 5}]
+check tap-places-caret {[lindex [split [.t index insert] .] 0] == 1 && [lindex [split [.t index insert] .] 1] > 0}
+check tap-focus {[focus] eq ".t"}
+# long press selects a word; dragging extends it
+set X [expr {$rx + 10 * 8}]; set Y [expr {$ry + 5}]
+::tkdroid::touch down $X $Y; update
+native longpress $X $Y 0 0
+check longpress-selects {[llength [.t tag ranges sel]] == 2}
+check longpress-word {[regexp {^\w+$} [.t get sel.first sel.last]]}
+::tkdroid::touch up $X $Y; update
+# toolbar flags: select all + copy (+ cut since editable)
+set ::menu {}
+rename ::tkdroid::textmenu ::tkdroid::textmenu_real
+proc ::tkdroid::textmenu {x y f} {set ::menu [list $x $y $f]}
+::tkdroid::touch down $X $Y; update
+native longpress $X $Y 0 0
+::tkdroid::touch up $X $Y; update
+update; update
+check menu-shown {[llength $::menu] == 3}
+check menu-flags {[lindex $::menu 2] & 8 && [lindex $::menu 2] & 2 && [lindex $::menu 2] & 1}
+native textaction 2 0 0 0
+check action-copy {[::tkdroid::hostclipboard] eq [.t get sel.first sel.last]}
+native textaction 8 0 0 0
+check action-selectall {[.t tag ranges sel] eq "1.0 [.t index end]"}
+native textaction 1 0 0 0
+check action-cut {[.t get 1.0 end] eq "\n"}
+check cut-to-clipboard {[string match "line 1 some*" [::tkdroid::hostclipboard]]}
+# paste enabled when the clipboard has text
+set ::menu {}
+.t insert end "hello world"
+::tkdroid::touch down $X $Y; update
+native longpress $X $Y 0 0
+::tkdroid::touch up $X $Y; update; update
+check menu-paste-flag {[lindex $::menu 2] & 4}
+destroy .t
+
+# ---- sliding off a button before lifting must not click it ---------------------------------------
+set clicks 0
+button .c -text Click -command {incr clicks}
+pack .c -pady 40
+update
+set cx [expr {[winfo rootx .c] + 10}]; set cy [expr {[winfo rooty .c] + 10}]
+tap $cx $cy
+check button-tap-clicks {$clicks == 1}
+::tkdroid::touch down $cx $cy; update
+::tkdroid::touch move $cx [expr {$cy + 400}]; update
+::tkdroid::touch up $cx [expr {$cy + 400}]; update
+check button-slide-off-no-click {$clicks == 1}
+::tkdroid::touch down $cx $cy; update
+::tkdroid::touch move [expr {$cx + 3}] $cy; update
+::tkdroid::touch up [expr {$cx + 3}] $cy; update
+check button-slide-within-clicks {$clicks == 2}
+::tkdroid::touch down $cx $cy; update
+::tkdroid::touch cancel $cx $cy; update
+check button-cancel-no-click {$clicks == 2}
+destroy .c
+
+# ---- long press on a button: virtual event, no word selection --------------------------------
+button .b -text Hello
+pack .b
+update
+set got {}
+bind .b <<LongPress>> {set got "%x,%y"}
+set bx [expr {[winfo rootx .b] + 10}]; set by [expr {[winfo rooty .b] + 10}]
+native longpress $bx $by 0 0
+check longpress-virtual {$got eq "10,10"}
+destroy .b
+
+# ---- listbox scrolls by rows --------------------------------------------------------------------
+listbox .l -height 8
+pack .l
+for {set i 0} {$i < 100} {incr i} {.l insert end "item $i"}
+update
+set lx [expr {[winfo rootx .l] + 20}]; set ly [expr {[winfo rooty .l] + 200}]
+drag $lx $ly [expr {$ly - 150}]
+::tkdroid::touch up $lx [expr {$ly - 150}]; update
+check listbox-drag {[.l nearest 0] > 0}
+check listbox-no-select {[.l curselection] eq ""}
+tap $lx [expr {[winfo rooty .l] + 30}]
+check listbox-tap-selects {[.l curselection] ne ""}
+destroy .l
+
+# ---- pinch ------------------------------------------------------------------------------------------
+frame .f -width 200 -height 200
+pack .f
+update
+set log {}
+bind .f <<PinchStart>> {lappend log "start %d"}
+bind .f <<Pinch>> {lappend log "pinch %d"}
+bind .f <<PinchEnd>> {lappend log "end %d"}
+set px [expr {[winfo rootx .f] + 50}]; set py [expr {[winfo rooty .f] + 50}]
+native pinch 0 $px $py 1000
+native pinch 1 $px $py 1500
+native pinch 2 $px $py 1750
+check pinch-events {$log eq {{start 1.000} {pinch 1.500} {end 1.750}}}
+# touchScroll off restores classic behaviour
+destroy .f
+set ::tkdroid::touchScroll 0
+text .t2 -width 30 -height 5
+pack .t2
+.t2 insert end "one two three\nfour five six\n"
+update
+set cx [expr {[winfo rootx .t2] + 5}]; set cy [expr {[winfo rooty .t2] + 5}]
+::tkdroid::touch down $cx $cy; update
+::tkdroid::touch move [expr {$cx + 60}] $cy; update
+::tkdroid::touch up [expr {$cx + 60}] $cy; update
+check classic-drag-selects {[llength [.t2 tag ranges sel]] == 2}
+# ---- rotation: the screen changes shape, the layout follows ------------------------------------------
+frame .rot -background red
+pack .rot -fill both -expand 1
+update
+::tkdroid::resize 2200 1080; update
+check rotate-landscape {[winfo width .] == 2200 && [winfo height .] == 1080 && [winfo width .rot] == 2200}
+::tkdroid::resize 1080 2200; update
+check rotate-portrait {[winfo width .] == 1080 && [winfo height .] == 2200}
+destroy .rot
+puts "failures: $fails"
+exit [expr {$fails > 0}]

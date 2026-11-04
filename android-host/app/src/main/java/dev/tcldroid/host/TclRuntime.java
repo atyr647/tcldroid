@@ -40,7 +40,18 @@ final class TclRuntime {
 
         /** Show or hide the soft keyboard (a text field was touched / lost focus). */
         void onKeyboard(boolean show);
+
+        /** The system clipboard's text as UTF-8, or null if it holds no text. */
+        byte[] getClipboard();
+
+        /** Replace the system clipboard's text (null: empty it). */
+        void setClipboard(byte[] utf8);
+
+        /** Show the native Cut/Copy/Paste/Select-all toolbar; flags are TKA_MENU_* bits. */
+        void onTextMenu(int x, int y, int flags);
     }
+
+    static final int MENU_CUT = 1, MENU_COPY = 2, MENU_PASTE = 4, MENU_SELECT_ALL = 8;
 
     static {
         // libtk9.0.so and libtcl9.0.so are DT_NEEDED dependencies of libtcldroid.so and
@@ -58,6 +69,14 @@ final class TclRuntime {
     private static native void nativeBack();
 
     private static native void nativeResize(int width, int height, int dpi);
+
+    private static native void nativeClipboardChanged();
+
+    private static native void nativeLongPress(int x, int y);
+
+    private static native void nativePinch(int phase, int x, int y, int scale1000);
+
+    private static native void nativeTextAction(int action);
 
     private static byte[] b(String s) {
         return s.getBytes(StandardCharsets.UTF_8);
@@ -83,6 +102,17 @@ final class TclRuntime {
     static void back() { nativeBack(); }
 
     static void resize(int width, int height, int dpi) { nativeResize(width, height, dpi); }
+
+    static void clipboardChanged() { nativeClipboardChanged(); }
+
+    static void longPress(int x, int y) { nativeLongPress(x, y); }
+
+    /** phase 0 start, 1 update, 2 end; scale is cumulative (1.0 = unchanged). */
+    static void pinch(int phase, int x, int y, float scale) {
+        nativePinch(phase, x, y, Math.round(scale * 1000f));
+    }
+
+    static void textAction(int action) { nativeTextAction(action); }
 
     private TclRuntime() {}
 }

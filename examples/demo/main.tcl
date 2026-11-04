@@ -42,7 +42,7 @@ ttk::progressbar .pb -mode indeterminate
 .pb start 25
 
 text .log -height 5 -wrap word -font TkFixedFont -relief sunken -borderwidth 2
-.log insert end "Self-test output appears here.\n"
+.log insert end "Self-test output appears here.\nDrag to scroll, long-press to select and copy, pinch the canvas to zoom the shapes.\n"
 
 # Run assets/selftest.tcl, showing its output in the text widget above.
 # Only writes to stdout/stderr are captured; `puts $file ...` must still reach the file.
@@ -74,27 +74,17 @@ proc runSelftest {} {
     .log see end
 }
 
-# Touch scrolling: dragging a finger over a text widget scrolls it (instead of selecting
-# text, which is the mouse behaviour). An example of the kind of helper Android needs.
-namespace eval ::touchscroll {
-    variable y0
-    proc enable {w} {
-        bind $w <ButtonPress-1> [list ::touchscroll::down $w %y]
-        bind $w <B1-Motion>     [list ::touchscroll::move $w %y]
-    }
-    proc down {w y} { variable y0; set y0($w) $y; return -code break }
-    proc move {w y} {
-        variable y0
-        set lh [font metrics [$w cget -font] -linespace]
-        set n [expr {int(($y0($w) - $y) / $lh)}]
-        if {$n != 0} {
-            $w yview scroll $n units
-            set y0($w) [expr {$y0($w) - $n * $lh}]
-        }
-        return -code break
-    }
+# Gestures. Dragging over the log scrolls it and a long press selects a word with the
+# system's Cut/Copy/Paste toolbar: that is built in (tk-android/library/android.tcl).
+# Pinching the canvas resizes the shapes, using the <<Pinch>> virtual event.
+set pinchLast 1.0
+bind .cv <<PinchStart>> {set pinchLast 1.0}
+bind .cv <<Pinch>> {
+    set f [expr {%d / $pinchLast}]
+    set pinchLast %d
+    .cv scale drag %x %y $f $f
 }
-touchscroll::enable .log
+bind .cv <<LongPress>> {.tap configure -text "Long press on the canvas at %x,%y"}
 
 # Measure how fast the pipeline redraws on this device (results go to the text box).
 proc benchmark {} {

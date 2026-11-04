@@ -43,7 +43,7 @@ Status legend: ⬜ not started · 🔨 in progress · ✅ verified on device/emu
 | --- | --- | --- | --- | --- |
 | `font`, `tk fontchooser` | Mapped / Unsupported (`fontchooser`) | System fonts via Android; measurement/shaping per ADR 0002 | 2 | ⬜ |
 | `image` / `photo` / `bitmap` / `nsimage` (`nsimage` is macOS-only) | Native / Unsupported | PNG, GIF, PPM, SVG are in `generic/` | 2 | ⬜ |
-| `clipboard`, `selection` | Mapped | | 3 | ⬜ |
+| `clipboard`, `selection` | Mapped | CLIPBOARD = system clipboard (text); PRIMARY in-process. See touch-and-clipboard.md. Host/JNI-tested, not yet on a device. | 3 | 🔨 |
 | `bell` | Mapped | haptic/sound feedback | 3 | ⬜ |
 | `cursors` / `-cursor` | Accepted | pointer icons only with a mouse | 3 | ⬜ |
 | `tk_getOpenFile`, `tk_getSaveFile`, `tk_chooseDirectory` | Mapped | Storage Access Framework | 3 | ⬜ |
