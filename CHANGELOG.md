@@ -4,6 +4,11 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.9.1
+- Accessibility: a screen-reader click now carries the node's own coordinates (no dependence on id bookkeeping on
+  the Tcl side); the view itself is no longer a focus/click target for TalkBack, and a click on it activates the
+  node that has screen-reader focus; the click is announced; API 26/27 guards.
+
 ## 0.9.0
 - **Accessibility**: TalkBack and other screen readers can read and operate Tk apps (roles, names, values,
   states, rectangles, click/focus/set-text/scroll actions, focus announcements) through an

@@ -167,5 +167,10 @@ text .ro -width 20 -height 2 -state normal
 pack .ro
 update
 check readonly-text-is-text {[find [nodes] text "read only words"] ne ""}
+# a click that carries its own coordinates works even for an id Tcl no longer knows
+set before $::clicks
+::tkdroid::a11y::action 999999 16 "[expr {[winfo rootx .b] + 5}] [expr {[winfo rooty .b] + 5}]"
+after 300 {set ::go 3}; vwait ::go
+check click-with-coordinates-needs-no-bookkeeping {$::clicks == $before + 1}
 puts "failures: $fails"
 exit [expr {$fails > 0}]

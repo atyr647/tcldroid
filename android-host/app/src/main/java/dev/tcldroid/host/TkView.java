@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
@@ -435,6 +436,17 @@ final class TkView extends View {
             if (virtualId == View.NO_ID) {
                 AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain(TkView.this);
                 onInitializeAccessibilityNodeInfo(info);
+                // The view itself is only a container for the nodes below it. If it were focusable or
+                // clickable, TalkBack could put its focus here and a double-tap would do nothing.
+                info.setFocusable(false);
+                info.setClickable(false);
+                info.setLongClickable(false);
+                if (Build.VERSION.SDK_INT >= 28) {
+                    info.setScreenReaderFocusable(false);
+                }
+                info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+                info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_FOCUS);
+                info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK);
                 for (int id : snap.roots) {
                     info.addChild(TkView.this, id);
                 }
@@ -474,7 +486,7 @@ final class TkView extends View {
             } else {
                 info.setText(n.label());
             }
-            if (n.role.equals("window")) {
+            if (n.role.equals("window") && Build.VERSION.SDK_INT >= 28) {
                 info.setPaneTitle(n.text);
             }
             if (n.has('x')) {
@@ -519,6 +531,8 @@ final class TkView extends View {
                     invalidate();
                     return true;
                 case AccessibilityNodeInfo.ACTION_CLICK:
+                    clickNode(n);
+                    return true;
                 case AccessibilityNodeInfo.ACTION_FOCUS:
                 case AccessibilityNodeInfo.ACTION_SCROLL_FORWARD:
                 case AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD:
@@ -535,6 +549,27 @@ final class TkView extends View {
             }
         }
     };
+
+    /**
+     * Click a node. The centre comes from the snapshot this side holds, so the click does not depend on the
+     * Tcl side still knowing the node's id. A tap there is what Tk sees, exactly as for a finger.
+     */
+    private void clickNode(A11ySnapshot.Node n) {
+        int cx = (n.x1 + n.x2) / 2, cy = (n.y1 + n.y2) / 2;
+        TclRuntime.a11yAction(n.id, AccessibilityNodeInfo.ACTION_CLICK, cx + " " + cy);
+        sendVirtualEvent(n.id, AccessibilityEvent.TYPE_VIEW_CLICKED);
+    }
+
+    /** A click on the view itself (some services do this): click what has screen-reader focus. */
+    @Override
+    public boolean performClick() {
+        A11ySnapshot.Node n = a11y.nodes.get(a11yFocusedId);
+        if (n != null && a11yOn) {
+            clickNode(n);
+            return true;
+        }
+        return super.performClick();
+    }
 
     @Override
     public AccessibilityNodeProvider getAccessibilityNodeProvider() {

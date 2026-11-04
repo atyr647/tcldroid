@@ -284,11 +284,20 @@ proc ::tkdroid::a11y::findRect {id} {
     return $w
 }
 
+proc ::tkdroid::a11y::tapAt {cx cy} {
+    ::tkdroid::touch down $cx $cy
+    after 60 [list ::tkdroid::touch up $cx $cy]
+}
+
 proc ::tkdroid::a11y::action {id action text} {
     variable keys; variable last
+    # A click arrives with the node's centre (the host's own snapshot): tap there. No bookkeeping needed.
+    if {$action == 16 && [regexp {^(-?\d+) (-?\d+)$} $text -> cx cy]} {
+	tapAt $cx $cy
+	return
+    }
     if {![info exists keys($id)]} return
     set key $keys($id)
-    # the node's rectangle comes from the last snapshot
     set rect {}
     foreach l [split $last \n] {
 	set f [split $l \t]
@@ -297,12 +306,10 @@ proc ::tkdroid::a11y::action {id action text} {
     set w [lindex [split $key #] 0]
     if {![winfo exists $w]} return
     switch -- $action {
-	16 {	;# click: a tap at the centre of the node (the widget does what a touch does)
+	16 {	;# click without coordinates: a tap at the centre of the node
 	    if {$rect eq ""} return
 	    lassign $rect x1 y1 x2 y2
-	    set cx [expr {($x1 + $x2) / 2}]; set cy [expr {($y1 + $y2) / 2}]
-	    ::tkdroid::touch down $cx $cy
-	    after 60 [list ::tkdroid::touch up $cx $cy]
+	    tapAt [expr {($x1 + $x2) / 2}] [expr {($y1 + $y2) / 2}]
 	}
 	1 {catch {focus -force $w}}	;# focus
 	2097152 {			;# set text
