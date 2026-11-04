@@ -97,5 +97,25 @@ With no handler the app closes. `exit` ends the Tcl interpreter and the Activity
 
 ## Typing
 
-The keyboard asks for plain text without suggestions or autocorrect, so code typed in a field
-arrives as typed. Composition (CJK, swipe typing with corrections) is not supported yet.
+`::tkdroid::inputmode ?code|text|number|email|url|password?` chooses what the soft keyboard offers (it
+returns the current mode; the default is `code`):
+
+| Mode | Keyboard |
+| --- | --- |
+| `code` | plain letters, **no suggestions or autocorrect**: what you want for code, commands, identifiers |
+| `text` | an ordinary text keyboard: suggestions, autocorrect, **swipe typing, and composition for CJK and other IME languages** |
+| `number`, `email`, `url`, `password` | the matching keyboard layouts |
+
+In `text` mode the keyboard's current candidate is real text in the widget, replaced as it changes and kept
+when you commit it (Tk's X11 widgets have no pre-edit display, so composition is inline, without the underline).
+Set the mode when a field takes focus, e.g. `bind $entry <FocusIn> {::tkdroid::inputmode email}`.
+
+**Hardware keyboards** work like a desktop: Shift, Ctrl and Alt state reaches Tk, so `<<Copy>>` (Ctrl+C),
+`<<Paste>>`, `<<Cut>>`, `<<Undo>>`, `<<SelectAll>>` (**Ctrl+A**, as on Android; Tk's X11 default would move
+to the line start, Home does that here), Ctrl+arrows, Shift+Tab, function keys F1-F12 and your own
+`bind ... <Control-s>` all fire.
+
+Text measuring: runs that contain non-ASCII characters are measured as a whole (what Android draws), not
+letter by letter, so wrapping and cursor positions follow the real shaped width. Tk itself has no right-to-left
+or bidirectional editing model; text is *drawn* correctly by Android but the caret and selection of mixed-direction
+lines follow logical order.

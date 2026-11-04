@@ -17,6 +17,9 @@ TkAndroidSetTextEngine(const TkATextEngine *engine)
     tkAEngine = engine;
 }
 
+#define PW_SLOTS 256
+static struct { void *eng; const char *src; int n; unsigned hash; int w; } pwCache[PW_SLOTS];
+
 typedef struct AFont {
     TkFont font;		/* must be first */
     void *eng;
@@ -73,6 +76,7 @@ TkpDeleteFont(TkFont *tkFontPtr)
 
     if (f->eng != NULL) {
 	TkAFlushTextCache();	/* cached masks are keyed by the engine's font handle */
+	memset(pwCache, 0, sizeof(pwCache));	/* ... and so are the prefix widths */
 	tkAEngine->close(f->eng);
 	f->eng = NULL;
     }
@@ -162,6 +166,97 @@ CharAdvance(AFont *f, const char *p, int len, int cp)
     return w;
 }
 
+/*
+ * Width of the first `n` bytes of `source`, measured as one run. Scripts that join letters (Arabic),
+ * reorder or combine them (Indic, Hebrew with points, emoji sequences) have no meaningful per-character
+ * advance: the platform shapes the run, and the run is also what is drawn, so layout must use the same
+ * number. A small cache keeps repeated prefixes of the same string cheap (a text widget asks for many).
+ */
+static int
+PrefixWidth(AFont *f, const char *source, int n)
+{
+    unsigned h = (unsigned) ((uintptr_t) f->eng >> 4) * 2654435761u;
+    int i, w;
+
+    for (i = 0; i < n; i++) {
+	h = (h ^ (unsigned char) source[i]) * 16777619u;
+    }
+    i = (int) (h % PW_SLOTS);
+    if (pwCache[i].eng == f->eng && pwCache[i].hash == h && pwCache[i].n == n) {
+	return pwCache[i].w;
+    }
+    w = tkAEngine->measure(f->eng, source, n);
+    pwCache[i].eng = f->eng;
+    pwCache[i].hash = h;
+    pwCache[i].n = n;
+    pwCache[i].w = w;
+    return w;
+}
+
+static int
+HasNonAscii(const char *s, Tcl_Size n)
+{
+    Tcl_Size i;
+
+    for (i = 0; i < n; i++) {
+	if ((unsigned char) s[i] >= 0x80) {
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+/* Tk_MeasureChars for runs with non-ASCII text: prefix widths instead of summed advances. */
+static int
+MeasureRun(AFont *f, const char *source, Tcl_Size numBytes, int maxPixels, int flags, int *lengthPtr)
+{
+    int lo = 0, hi, fit = 0, total, lastBreak = -1;
+    Tcl_Size i;
+    int *ends = (int *) ckalloc(sizeof(int) * ((size_t) numBytes + 1));
+    int count = 0;
+
+    for (i = 0; i < numBytes; ) {
+	int cp, len = (int) Tcl_UtfToUniChar(source + i, &cp);
+
+	if (len < 1) len = 1;
+	if (i + len > numBytes) len = (int) (numBytes - i);
+	i += len;
+	ends[count++] = (int) i;
+	if (cp == ' ' || cp == '\t') {
+	    lastBreak = count - 1;
+	}
+    }
+    total = PrefixWidth(f, source, (int) numBytes);
+    if (maxPixels < 0 || total <= maxPixels) {
+	fit = count;
+	*lengthPtr = total;
+    } else {
+	/* the largest number of characters whose prefix still fits */
+	lo = 0;
+	hi = count;
+	while (lo < hi) {
+	    int mid = (lo + hi + 1) / 2;
+
+	    if (PrefixWidth(f, source, ends[mid - 1]) <= maxPixels) lo = mid; else hi = mid - 1;
+	}
+	fit = lo;
+	if ((flags & TK_PARTIAL_OK) && fit < count && fit > 0
+		&& PrefixWidth(f, source, ends[fit - 1]) < maxPixels) {
+	    fit++;
+	}
+	if ((flags & TK_WHOLE_WORDS) && lastBreak >= 0 && lastBreak < fit) {
+	    fit = lastBreak + 1;
+	}
+	if (fit == 0 && (flags & TK_AT_LEAST_ONE) && count > 0) {
+	    fit = 1;
+	}
+	*lengthPtr = fit > 0 ? PrefixWidth(f, source, ends[fit - 1]) : 0;
+    }
+    i = fit > 0 ? ends[fit - 1] : 0;
+    ckfree(ends);
+    return (int) i;
+}
+
 int
 Tk_MeasureChars(Tk_Font tkfont, const char *source, Tcl_Size numBytes, int maxPixels,
 	int flags, int *lengthPtr)
@@ -170,6 +265,9 @@ Tk_MeasureChars(Tk_Font tkfont, const char *source, Tcl_Size numBytes, int maxPi
     int i = 0, curX = 0, lastBreak = -1, lastBreakX = 0;
     int stoppedEarly = 0;
 
+    if (numBytes > 0 && HasNonAscii(source, numBytes)) {
+	return MeasureRun(f, source, numBytes, maxPixels, flags, lengthPtr);
+    }
     while (i < numBytes) {
 	int cp, len = (int) Tcl_UtfToUniChar(source + i, &cp), w;
 

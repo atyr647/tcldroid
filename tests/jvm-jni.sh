@@ -16,7 +16,7 @@ gcc -shared -fPIC -g -Wall -Wextra -DTCLDROID_HOST_JVM -I"$JH/include" -I"$JH/in
 J="$TCLDROID_ROOT/android-host/app/src/main/java/dev/tcldroid/host"
 "$JH/bin/javac" -nowarn -d "$W/classes" "$TCLDROID_ROOT"/tests/jvm/stubs/android/content/Context.java \
     "$TCLDROID_ROOT"/tests/jvm/stubs/android/content/pm/ApplicationInfo.java \
-    "$J/TclRuntime.java" "$TCLDROID_ROOT"/tests/jvm/src/dev/tcldroid/host/*.java 2>&1 | grep -v "^Note:" || true
+    "$J/TclRuntime.java" "$J/ImeBridge.java" "$TCLDROID_ROOT"/tests/jvm/src/dev/tcldroid/host/*.java 2>&1 | grep -v "^Note:" || true
 cp "$TCLDROID_ROOT/android-host/app/src/main/assets/selftest.tcl" "$W/files/assets/"
 SCRIPT="${1:-$TCLDROID_ROOT/examples/demo/main.tcl}"
 cd "$W"
@@ -56,6 +56,8 @@ if [ "${GESTURES:-1}" = 1 ]; then
   expect '\[tcl\] RESULT share ok 0' "result-share"
   expect '\[tcl\] RESULT save cancelled 0' "result-savefile-cancelled"
   expect 'PERMITTED 1 0' "permitted-sync"
+  expect 'MODE code text code 1' "inputmode-command"
+  expect '\[java\] INPUTMODE 1' "inputmode-reaches-host"
   expect 'ERR 1 pickfile needs -command' "pickfile-requires-command"
   expect 'ERR 1 share needs -text or -file' "share-requires-content"
   expect 'ERR 1 bad option "-bogus"' "bad-option-rejected"
@@ -96,3 +98,6 @@ r, g, b = px[i], px[i + 1], px[i + 2]
 sys.exit(0 if (g > 100 and r < 50 and b < 50) else 1)
 PY
 fi
+
+# Keyboard composition logic (pure Java)
+"$JH/bin/java" -cp "$W/classes" dev.tcldroid.host.ImeTest || exit 1

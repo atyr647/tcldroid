@@ -381,6 +381,10 @@ proc ::tkdroid::install {} {
 	set orig($c,<Double-Button-1>) [bind $c <Double-Button-1>]
     }
     bind all <ButtonRelease-1> {+::tkdroid::AnyUp}
+    # Hardware keyboards: Ctrl+A selects all, as on every Android text field (Tk's X11 default is the
+    # Emacs "go to line start"; Home does that here).
+    catch {event delete <<LineStart>> <Control-Key-a>}
+    event add <<SelectAll>> <Control-Key-a>
 }
 
 ::tkdroid::install

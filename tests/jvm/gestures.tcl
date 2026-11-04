@@ -19,6 +19,7 @@ proc cb {name status results} {puts "RESULT $name $status [llength $results] [jo
 set src [file join $::env(TMPDIR) save-src.txt]
 set fh [open $src w]; puts $fh notes; close $fh
 ::tkdroid::savefile -source $src -name "my notes.txt" -type text/plain -command {cb save}
+puts "MODE [::tkdroid::inputmode] [::tkdroid::inputmode text] [::tkdroid::inputmode code] [catch {::tkdroid::inputmode bogus}]"
 puts "PERMITTED [::tkdroid::permitted android.permission.VIBRATE] [::tkdroid::permitted android.permission.CAMERA]"
 puts "ERR [catch {::tkdroid::pickfile} m] $m"
 puts "ERR [catch {::tkdroid::share} m] $m"

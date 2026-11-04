@@ -4,6 +4,12 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.8.0
+- `::tkdroid::inputmode`: code / text / number / email / url / password keyboards; **IME composition** (swipe typing,
+  suggestions, CJK) inline in `text` mode.
+- Hardware keyboard: modifier state, Ctrl+C/V/X/A/Z, Shift+Tab, F1-F12, Ctrl+arrows.
+- Non-ASCII text is measured as a whole run (consistent with drawing; right for joined and combining scripts).
+
 ## 0.7.0
 - Platform services for Tcl scripts: `::tkdroid::pickfile`, `savefile`, `share`, `openurl`, `permission`,
   `permitted`, `notify` ([device-api.md](docs/device-api.md)); a content provider shares files safely.

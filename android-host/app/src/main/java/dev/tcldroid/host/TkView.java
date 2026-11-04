@@ -272,8 +272,19 @@ final class TkView extends View {
             case KeyEvent.KEYCODE_PAGE_UP: return XK_PRIOR;
             case KeyEvent.KEYCODE_PAGE_DOWN: return XK_NEXT;
             case KeyEvent.KEYCODE_INSERT: return XK_INSERT;
+            case KeyEvent.KEYCODE_F1: case KeyEvent.KEYCODE_F2: case KeyEvent.KEYCODE_F3: case KeyEvent.KEYCODE_F4:
+            case KeyEvent.KEYCODE_F5: case KeyEvent.KEYCODE_F6: case KeyEvent.KEYCODE_F7: case KeyEvent.KEYCODE_F8:
+            case KeyEvent.KEYCODE_F9: case KeyEvent.KEYCODE_F10: case KeyEvent.KEYCODE_F11: case KeyEvent.KEYCODE_F12:
+                return 0xFFBE + (keyCode - KeyEvent.KEYCODE_F1);
             default: return 0;
         }
+    }
+
+    /** X modifier mask for the event: Shift 1, Control 4, Alt (Mod1) 8. Hardware keyboards only. */
+    private static int xstate(KeyEvent e) {
+        int m = e.getMetaState();
+        return ((m & KeyEvent.META_SHIFT_ON) != 0 ? 1 : 0) | ((m & KeyEvent.META_CTRL_ON) != 0 ? 4 : 0)
+                | ((m & KeyEvent.META_ALT_ON) != 0 ? 8 : 0);
     }
 
     private boolean forward(KeyEvent e, boolean down) {
@@ -281,14 +292,21 @@ final class TkView extends View {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             return false;	// handled by the Activity
         }
+        int state = xstate(e);
         int sym = specialKeysym(keyCode);
+        if (sym == XK_TAB && (state & 1) != 0) {
+            sym = 0xFE20;	// ISO_Left_Tab, what X sends for Shift+Tab (Tk binds <<PrevWindow>> to it)
+        }
         if (sym != 0) {
-            TclRuntime.key(down, sym, 0, 0);
+            TclRuntime.key(down, sym, 0, state);
             return true;
         }
-        int cp = e.getUnicodeChar();
+        // Ctrl+C etc.: the character WITHOUT Ctrl/Alt/Meta (getUnicodeChar() would give a control code), so
+        // that <Control-c>, <<Copy>>, <<Paste>>, <<SelectAll>>, <<Undo>> and friends fire as on a desktop.
+        int plain = e.getMetaState() & ~(KeyEvent.META_CTRL_MASK | KeyEvent.META_ALT_MASK | KeyEvent.META_META_MASK);
+        int cp = e.getUnicodeChar(plain);
         if (cp > 0 && !Character.isISOControl(cp)) {
-            TclRuntime.key(down, 0, cp, 0);
+            TclRuntime.key(down, 0, cp, state);
             return true;
         }
         return false;
@@ -306,6 +324,58 @@ final class TkView extends View {
 
     // ---- soft keyboard ---------------------------------------------------------------------------
 
+    // ---- what kind of text the soft keyboard offers (::tkdroid::inputmode) ---------------------------------------
+
+    /** TKA_INPUT_*: 0 code (no suggestions or autocorrect), 1 text (composition on), 2 number, 3 email, 4 url, 5 password. */
+    private volatile int inputMode;
+
+    private final ImeBridge ime = new ImeBridge(new ImeBridge.Sink() {
+        @Override
+        public void chars(String str) {
+            for (int i = 0; i < str.length(); ) {
+                int c = str.codePointAt(i);
+                i += Character.charCount(c);
+                TclRuntime.key(true, 0, c, 0);
+                TclRuntime.key(false, 0, c, 0);
+            }
+        }
+
+        @Override
+        public void backspace(int n) {
+            for (int i = 0; i < n; i++) {
+                TclRuntime.key(true, XK_BACKSPACE, 0, 0);
+                TclRuntime.key(false, XK_BACKSPACE, 0, 0);
+            }
+        }
+
+        @Override
+        public void deleteForward(int n) {
+            for (int i = 0; i < n; i++) {
+                TclRuntime.key(true, XK_DELETE, 0, 0);
+                TclRuntime.key(false, XK_DELETE, 0, 0);
+            }
+        }
+
+        @Override
+        public void enter() {
+            TclRuntime.key(true, XK_RETURN, 0, 0);
+            TclRuntime.key(false, XK_RETURN, 0, 0);
+        }
+    });
+
+    void setInputMode(final int mode) {
+        inputMode = mode;
+        post(new Runnable() {
+            @Override
+            public void run() {
+                InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.restartInput(TkView.this);	// asks onCreateInputConnection again
+                }
+            }
+        });
+    }
+
     @Override
     public boolean onCheckIsTextEditor() {
         return true;
@@ -313,45 +383,60 @@ final class TkView extends View {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo out) {
-        // Visible-password mode asks the keyboard to commit each character immediately,
-        // without composing text or suggestions (composition is not supported yet).
-        out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+        int mode = inputMode;
+        switch (mode) {
+            case 1:	// ordinary text: suggestions, swipe typing and CJK composition on
+                out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+                break;
+            case 2:
+                out.inputType = InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                        | InputType.TYPE_NUMBER_FLAG_SIGNED;
+                break;
+            case 3:
+                out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS;
+                break;
+            case 4:
+                out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI;
+                break;
+            case 5:
+                out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD;
+                break;
+            default:	// code: visible-password mode asks the keyboard to commit each character at once
+                out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                        | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+        }
         out.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI
                 | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        ime.finish();
+        ime.setComposingEnabled(mode == 1);
         return new BaseInputConnection(this, false) {
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
-                String s = text.toString();
-                for (int i = 0; i < s.length(); ) {
-                    int cp = s.codePointAt(i);
-                    i += Character.charCount(cp);
-                    if (cp == '\n') {
-                        TclRuntime.key(true, XK_RETURN, 0, 0);
-                        TclRuntime.key(false, XK_RETURN, 0, 0);
-                    } else {
-                        TclRuntime.key(true, 0, cp, 0);
-                        TclRuntime.key(false, 0, cp, 0);
-                    }
-                }
+                ime.commit(text.toString());
                 return true;
             }
 
             @Override
             public boolean setComposingText(CharSequence text, int newCursorPosition) {
-                return commitText(text, newCursorPosition);
+                ime.setComposing(text.toString());
+                return true;
+            }
+
+            @Override
+            public boolean finishComposingText() {
+                ime.finish();
+                return true;
+            }
+
+            @Override
+            public boolean setComposingRegion(int start, int end) {
+                return true;
             }
 
             @Override
             public boolean deleteSurroundingText(int before, int after) {
-                for (int i = 0; i < before; i++) {
-                    TclRuntime.key(true, XK_BACKSPACE, 0, 0);
-                    TclRuntime.key(false, XK_BACKSPACE, 0, 0);
-                }
-                for (int i = 0; i < after; i++) {
-                    TclRuntime.key(true, XK_DELETE, 0, 0);
-                    TclRuntime.key(false, XK_DELETE, 0, 0);
-                }
+                ime.deleteSurrounding(before, after);
                 return true;
             }
 
@@ -362,8 +447,8 @@ final class TkView extends View {
 
             @Override
             public boolean performEditorAction(int actionCode) {
-                TclRuntime.key(true, XK_RETURN, 0, 0);
-                TclRuntime.key(false, XK_RETURN, 0, 0);
+                ime.finish();
+                ime.commit("\n");
                 return true;
             }
         };

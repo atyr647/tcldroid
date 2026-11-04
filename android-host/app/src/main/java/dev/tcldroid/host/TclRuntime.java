@@ -81,6 +81,9 @@ final class TclRuntime {
 
         /** 1 if the Android permission is granted, else 0. */
         int checkPermission(byte[] permission);
+
+        /** What the soft keyboard should offer: 0 code, 1 text, 2 number, 3 email, 4 url, 5 password. */
+        void onInputMode(int mode);
     }
 
     static final int LIFE_PAUSE = 0, LIFE_RESUME = 1, LIFE_LOWMEMORY = 2;

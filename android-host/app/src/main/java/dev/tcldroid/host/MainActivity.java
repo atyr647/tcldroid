@@ -321,6 +321,11 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     }
 
     @Override
+    public void onInputMode(int mode) {
+        tkView.setInputMode(mode);
+    }
+
+    @Override
     public int checkPermission(byte[] permission) {
         return services().check(path(permission));
     }

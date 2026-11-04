@@ -38,7 +38,7 @@ static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
 	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu, gVibrate, gHaptic, gSoundPreload,
-	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen, gRequest, gCheckPerm;
+	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen, gRequest, gCheckPerm, gInputMode;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -341,9 +341,18 @@ CheckPermission(const char *permission)
     return (int) r;
 }
 
+static void
+InputMode(int mode)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gInputMode, mode);
+    Check(e);
+}
+
 static const TkAHost host = {Present, SetTitle, Fullscreen, BackUnhandled, MoveToBack, Caret, Keyboard,
 	GetClipboard, SetClipboard, TextMenu, Vibrate, Haptic, SoundPreload, SoundPlay, SoundStop,
-	Bell, LifecycleDone, SystemInfo, Request, CheckPermission};
+	Bell, LifecycleDone, SystemInfo, Request, CheckPermission, InputMode};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -571,6 +580,7 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gSysInfo = (*env)->GetMethodID(env, lc, "systemInfo", "()[B");
     gFullscreen = (*env)->GetMethodID(env, lc, "onFullscreen", "(Z)V");
     gRequest = (*env)->GetMethodID(env, lc, "onRequest", "(I[B[B)V");
+    gInputMode = (*env)->GetMethodID(env, lc, "onInputMode", "(I)V");
     gCheckPerm = (*env)->GetMethodID(env, lc, "checkPermission", "([B)I");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {

@@ -191,6 +191,67 @@ check svc-headless-error {[lindex $::svc 0 0] eq "error"}
 check svc-permitted-headless {[::tkdroid::permitted android.permission.CAMERA] == 0}
 check svc-bad-options {[catch {::tkdroid::savefile -name x -command y}] && [catch {::tkdroid::openurl}]}
 
+# ---- hardware keyboard: modifier state reaches Tk (Ctrl+C/V/X/A/Z, Shift+Tab, function keys) --------------
+proc hwkey {name {state 0}} {::tkdroid::key down $name $state; update; ::tkdroid::key up $name $state; update}
+entry .ke -width 30
+pack .ke
+update
+focus -force .ke
+.ke insert end "hello world"
+.ke selection range 0 5
+hwkey c 4				;# Ctrl+C
+check hwkey-ctrl-c {[::tkdroid::hostclipboard] eq "hello"}
+.ke selection clear
+.ke icursor end
+hwkey v 4				;# Ctrl+V
+check hwkey-ctrl-v {[.ke get] eq "hello worldhello"}
+hwkey a 4				;# Ctrl+A: select all (Tk's X11 binding is <<SelectAll>> on Control-slash and Control-a)
+check hwkey-ctrl-a {[.ke selection present] && [selection get] eq "hello worldhello"}
+hwkey x 4				;# Ctrl+X cuts the selection
+check hwkey-ctrl-x {[.ke get] eq "" && [::tkdroid::hostclipboard] eq "hello worldhello"}
+text .kt -width 20 -height 3 -undo 1
+pack .kt
+update
+focus -force .kt
+.kt insert end "abc"
+.kt edit separator
+hwkey d 0
+hwkey e 0
+check hwkey-plain-typing {[.kt get 1.0 end-1c] eq "abcde"}
+hwkey z 4				;# Ctrl+Z undoes
+check hwkey-ctrl-z {[.kt get 1.0 end-1c] ne "abcde"}
+button .kb1 -text A; button .kb2 -text B
+pack .kb1 .kb2
+focus -force .kb2
+hwkey Tab 1			;# Shift+Tab: previous widget (the real X keysym is ISO_Left_Tab)
+hwkey ISO_Left_Tab 1
+check hwkey-shift-tab {[focus] ne ".kb2"}
+set ::fk {}
+bind .kb1 <F5> {lappend ::fk F5}
+bind .kb1 <Control-Right> {lappend ::fk C-Right}
+focus -force .kb1
+hwkey F5
+hwkey Right 4
+check hwkey-function-and-arrow-with-modifier {$::fk eq "F5 C-Right"}
+destroy .ke .kt .kb1 .kb2
+
+# ---- non-ASCII text is measured as a run, consistently with how Tk lays it out -------------------------------------
+set f {Helvetica 12}
+set txt "h\u00e9llo w\u00f6rld \u4f60\u597d \u0645\u0631\u062d\u0628\u0627"
+set whole [font measure $f $txt]
+check measure-run-positive {$whole > [font measure $f "h"]}
+check measure-prefix-monotonic {[font measure $f "h\u00e9"] > [font measure $f "h"] && [font measure $f "h\u00e9llo"] > [font measure $f "h\u00e9"]}
+label .nl -text $txt -font $f -wraplength [expr {$whole / 2}] -justify left
+pack .nl
+update
+check wrap-nonascii-two-or-more-lines {[winfo reqheight .nl] >= 2 * [font metrics $f -linespace]}
+check wrap-nonascii-width-bounded {[winfo reqwidth .nl] <= $whole / 2 + 4}
+label .nl2 -text $txt -font $f
+pack .nl2
+update
+check nowrap-width-equals-measure {abs([winfo reqwidth .nl2] - $whole) <= 2 * [.nl2 cget -borderwidth] + 2 * [.nl2 cget -padx] + 2 * [.nl2 cget -highlightthickness]}
+destroy .nl .nl2
+
 # ---- ::tkdroid:: must not shadow Tcl/Tk commands: scripts inside the namespace would call them ----
 foreach c [info commands ::tkdroid::*] {
     set t [namespace tail $c]

@@ -2,6 +2,9 @@
 # It stores its text in $env(HOME)/notes.txt (the app's private storage).
 package require Tk
 
+# Prose, not code: let the keyboard suggest, correct and compose (swipe typing, CJK).
+catch {::tkdroid::inputmode text}
+
 set file [file join $::env(HOME) notes.txt]
 set dpi  [expr {[winfo pixels . 1i]}]
 set status ""

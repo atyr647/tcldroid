@@ -1067,22 +1067,25 @@ TouchCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
 static int
 KeyCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
 {
-    int down, cp;
+    int down, cp, state = 0;
     const char *name;
     KeySym ks;
 
     (void) cd;
-    if (objc != 3) {
-	Tcl_WrongNumArgs(interp, 1, objv, "down|up keysymName-or-char");
+    if (objc != 3 && objc != 4) {
+	Tcl_WrongNumArgs(interp, 1, objv, "down|up keysymName-or-char ?modifierState?");
+	return TCL_ERROR;
+    }
+    if (objc == 4 && Tcl_GetIntFromObj(interp, objv[3], &state) != TCL_OK) {
 	return TCL_ERROR;
     }
     down = strcmp(Tcl_GetString(objv[1]), "down") == 0;
     name = Tcl_GetString(objv[2]);
     ks = XStringToKeysym(name);
     if (ks != NoSymbol) {
-	TkAQueueKey(down, (int) ks, 0, 0);
+	TkAQueueKey(down, (int) ks, 0, state);
     } else if (Tcl_UtfToUniChar(name, &cp) > 0) {
-	TkAQueueKey(down, 0, cp, 0);
+	TkAQueueKey(down, 0, cp, state);
     }
     return TCL_OK;
 }

@@ -251,9 +251,36 @@ PermittedCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/* ::tkdroid::inputmode ?code|text|number|email|url|password?  -- what the soft keyboard offers. */
+static int
+InputModeCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    static const char *const modes[] = {"code", "text", "number", "email", "url", "password", NULL};
+    static int current;
+    int m;
+
+    (void) cd;
+    if (objc > 2) {
+	Tcl_WrongNumArgs(interp, 1, objv, "?code|text|number|email|url|password?");
+	return TCL_ERROR;
+    }
+    if (objc == 2) {
+	if (Tcl_GetIndexFromObj(interp, objv[1], modes, "mode", 0, &m) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	current = m;
+	if (tkAHost.inputMode != NULL) {
+	    tkAHost.inputMode(m);
+	}
+    }
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(modes[current], TCL_AUTO_LENGTH));
+    return TCL_OK;
+}
+
 int
 TkAInitSystemCommands(Tcl_Interp *interp)
 {
+    Tcl_CreateObjCommand2(interp, "::tkdroid::inputmode", InputModeCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::request", RequestCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::permitted", PermittedCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::vibrate", VibrateCmd, NULL, NULL);

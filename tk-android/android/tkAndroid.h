@@ -59,7 +59,11 @@ typedef struct TkAHost {
     void (*request)(int id, const char *kind, const char *args);
     /* Is the Android permission granted? 1 yes, 0 no. */
     int (*checkPermission)(const char *permission);
+    /* What the soft keyboard should offer: TKA_INPUT_*. */
+    void (*inputMode)(int mode);
 } TkAHost;
+
+enum { TKA_INPUT_CODE, TKA_INPUT_TEXT, TKA_INPUT_NUMBER, TKA_INPUT_EMAIL, TKA_INPUT_URL, TKA_INPUT_PASSWORD };
 
 enum { TKA_HAPTIC_TICK, TKA_HAPTIC_CLICK, TKA_HAPTIC_HEAVY, TKA_HAPTIC_CONFIRM, TKA_HAPTIC_REJECT };
 enum { TKA_LIFE_PAUSE, TKA_LIFE_RESUME, TKA_LIFE_LOWMEMORY };
