@@ -37,7 +37,8 @@
 static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
-	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu;
+	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu, gVibrate, gHaptic, gSoundPreload,
+	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -218,8 +219,106 @@ TextMenu(int x, int y, int flags)
     Check(e);
 }
 
-static const TkAHost host = {Present, SetTitle, NULL, BackUnhandled, MoveToBack, Caret, Keyboard,
-	GetClipboard, SetClipboard, TextMenu};
+static void
+Fullscreen(int on)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gFullscreen, on ? JNI_TRUE : JNI_FALSE);
+    Check(e);
+}
+
+static void
+Vibrate(int ms, int amplitude)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gVibrate, ms, amplitude);
+    Check(e);
+}
+
+static void
+Haptic(int kind)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gHaptic, kind);
+    Check(e);
+}
+
+static void
+SoundPreload(const char *path)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = ToByteArray(e, path, (jsize) strlen(path));
+
+    (*e)->CallVoidMethod(e, gListener, gSoundPreload, a);
+    (*e)->DeleteLocalRef(e, a);
+    Check(e);
+}
+
+static void
+SoundPlay(const char *path, int volume1000, int rate1000)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = ToByteArray(e, path, (jsize) strlen(path));
+
+    (*e)->CallVoidMethod(e, gListener, gSoundPlay, a, volume1000, rate1000);
+    (*e)->DeleteLocalRef(e, a);
+    Check(e);
+}
+
+static void
+SoundStop(void)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gSoundStop);
+    Check(e);
+}
+
+static void
+Bell(void)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gBell);
+    Check(e);
+}
+
+static void
+LifecycleDone(int kind)
+{
+    JNIEnv *e = Env();
+
+    (*e)->CallVoidMethod(e, gListener, gLifeDone, kind);
+    Check(e);
+}
+
+static char *
+SystemInfo(void)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = (jbyteArray) (*e)->CallObjectMethod(e, gListener, gSysInfo);
+    char *s = NULL;
+
+    Check(e);
+    if (a != NULL) {
+	jsize n = (*e)->GetArrayLength(e, a);
+
+	s = malloc((size_t) n + 1);
+	if (s != NULL) {
+	    (*e)->GetByteArrayRegion(e, a, 0, n, (jbyte *) s);
+	    s[n] = '\0';
+	}
+	(*e)->DeleteLocalRef(e, a);
+    }
+    return s;
+}
+
+static const TkAHost host = {Present, SetTitle, Fullscreen, BackUnhandled, MoveToBack, Caret, Keyboard,
+	GetClipboard, SetClipboard, TextMenu, Vibrate, Haptic, SoundPreload, SoundPlay, SoundStop,
+	Bell, LifecycleDone, SystemInfo};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -437,6 +536,15 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gGetClip = (*env)->GetMethodID(env, lc, "getClipboard", "()[B");
     gSetClip = (*env)->GetMethodID(env, lc, "setClipboard", "([B)V");
     gTextMenu = (*env)->GetMethodID(env, lc, "onTextMenu", "(III)V");
+    gVibrate = (*env)->GetMethodID(env, lc, "onVibrate", "(II)V");
+    gHaptic = (*env)->GetMethodID(env, lc, "onHaptic", "(I)V");
+    gSoundPreload = (*env)->GetMethodID(env, lc, "onSoundPreload", "([B)V");
+    gSoundPlay = (*env)->GetMethodID(env, lc, "onSoundPlay", "([BII)V");
+    gSoundStop = (*env)->GetMethodID(env, lc, "onSoundStop", "()V");
+    gBell = (*env)->GetMethodID(env, lc, "onBell", "()V");
+    gLifeDone = (*env)->GetMethodID(env, lc, "onLifecycleDone", "(I)V");
+    gSysInfo = (*env)->GetMethodID(env, lc, "systemInfo", "()[B");
+    gFullscreen = (*env)->GetMethodID(env, lc, "onFullscreen", "(Z)V");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {
 	return JNI_FALSE;	/* NoClassDefFoundError is pending */
@@ -537,4 +645,11 @@ Java_dev_tcldroid_host_TclRuntime_nativeTextAction(JNIEnv *env, jclass clazz, ji
 {
     (void) env; (void) clazz;
     TkAQueueTextAction(action);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeLifecycle(JNIEnv *env, jclass clazz, jint kind)
+{
+    (void) env; (void) clazz;
+    TkAQueueLifecycle(kind);
 }

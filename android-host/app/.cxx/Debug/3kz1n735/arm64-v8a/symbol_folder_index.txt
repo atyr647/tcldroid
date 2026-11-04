@@ -1,1 +1,0 @@
-/home/user/tcldroid/android-host/app/build/intermediates/cxx/Debug/3kz1n735/obj/arm64-v8a

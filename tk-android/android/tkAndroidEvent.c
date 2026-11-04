@@ -17,7 +17,7 @@
 /* ---- the UI-thread -> Tcl-thread queue ------------------------------------------- */
 
 enum { REC_TOUCH = 1, REC_KEY = 2, REC_BACK = 3, REC_RESIZE = 4, REC_CLIP = 5, REC_LONG = 6,
-    REC_PINCH = 7, REC_ACTION = 8 };
+    REC_PINCH = 7, REC_ACTION = 8, REC_LIFE = 9 };
 
 typedef struct Rec {
     int kind;
@@ -156,6 +156,14 @@ void
 TkAQueuePinch(int phase, int x, int y, int scale1000)
 {
     Rec r = {REC_PINCH, phase, x, y, scale1000};
+
+    Push(r);
+}
+
+void
+TkAQueueLifecycle(int kind)
+{
+    Rec r = {REC_LIFE, kind, 0, 0, 0};
 
     Push(r);
 }
@@ -534,6 +542,12 @@ CheckProc(void *cd, int flags)
 	    break;
 	case REC_ACTION:
 	    CallScript("textaction", r.a, 0, 0, 0);
+	    break;
+	case REC_LIFE:
+	    CallScript("lifecycle", r.a, 0, 0, 0);
+	    if (tkAHost.lifecycleDone != NULL) {
+		tkAHost.lifecycleDone(r.a);
+	    }
 	    break;
 	}
     }
@@ -957,6 +971,7 @@ int
 TkAInitCommands(Tcl_Interp *interp)
 {
     Tcl_CreateObjCommand2(interp, "::tkdroid::textmenu", TextMenuCmd, NULL, NULL);
+    TkAInitSystemCommands(interp);
     Tcl_CreateObjCommand2(interp, "::tkdroid::hostclipboard", TkAClipboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::keyboard", KeyboardCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::stats", StatsCmd, NULL, NULL);

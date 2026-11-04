@@ -23,9 +23,26 @@ because its id is different).
 - Back runs your `wm protocol . WM_DELETE_WINDOW` handler; with no handler the app closes.
 - Keep a distinct `--id` per app and raise `--code` for each update you install over an old one.
 
+## Signing and updates
+
+```
+tools/make-keystore.sh my-key.jks                    # once; back the file up
+TCLDROID_KS_PASS=... tools/pack-app.sh myapp --keystore my-key.jks --key-alias key0 --code 2
+```
+
+Without `--keystore` the APK carries the Android debug key: fine for your own phone, but an app
+installs **over** an older one only if both use the same `--id`, the same key, and a higher
+`--code`. `--release` builds a non-debuggable APK and `--aab` an Android App Bundle (both need a
+keystore). Passwords are read from the environment or asked for, never taken from the command
+line. The key that signed an *existing* app (for example the AndroWish-based build) is needed to
+update that app in place; without it, ship the new build under a new `--id` and move user data over.
+
+The unpacked app folder is kept between launches and replaced only when a different build of the
+app is installed.
+
 ## Limits (be aware)
 
-- APKs are **debug-signed** (installable, not Play-Store-ready). Release signing/AAB is not done.
+- Release signing and AAB output exist but are not yet verified against a Play Store upload.
 - Starkits/Starpacks (Metakit-based `.kit`) are **not supported yet**; ship plain folders or zip
   your own scripts. Tcl 9's `zipfs` works for your own zips.
 - Third-party compiled extensions are not supported yet (only pure-Tcl packages plus those in Tcl/Tk).

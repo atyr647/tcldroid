@@ -41,6 +41,21 @@ if [ "${GESTURES:-1}" = 1 ]; then
   expect 'PINCH start 1.000' "pinch-start"
   expect 'PINCH update 1.500' "pinch-update"
   expect 'PINCH end 2.000' "pinch-end"
+  expect '\[java\] VIBRATE 30 amp=128' "vibrate"
+  expect '\[java\] HAPTIC 3' "haptic-confirm"
+  expect 'SOUND preload .*beep.wav' "sound-preload"
+  expect 'SOUND play .*beep.wav vol=500 rate=1500' "sound-play-volume-rate"
+  expect '\[java\] SOUND stop' "sound-stop"
+  expect '\[java\] BELL' "bell"
+  expect 'INFO sdk=35 model=Harness files=/x y android=1' "info"
+  expect 'ERR 1 couldn.t read sound file' "sound-missing-file-error"
+  expect 'ERR 1 milliseconds must be' "vibrate-range-error"
+  expect '\[java\] FULLSCREEN true' "fullscreen"
+  expect '\[tcl\] LIFE pause' "lifecycle-pause-event"
+  expect '\[tcl\] LIFE save' "lifecycle-savestate-event"
+  expect '\[java\] LIFECYCLE done 0' "lifecycle-pause-acknowledged"
+  expect '\[tcl\] LIFE resume' "lifecycle-resume-event"
+  expect '\[tcl\] LIFE lowmem' "lifecycle-lowmemory-event"
   [ "$(grep -c '^\[tcl\] PROBE' "$OUT")" = 3 ] && echo "PASS cancel-is-not-a-click" || { echo "FAIL cancel-is-not-a-click"; fail=1; }
   [ $fail = 0 ] || exit 1
 fi

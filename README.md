@@ -2,7 +2,7 @@
 
 Goal: run ordinary Tcl/Tk applications (and package Starkits/Starpacks as installable APK/AABs) on Android using a **real native port** of Tcl and Tk — no PRoot, Termux, X11/SDL shim or replacement toolkit.
 
-The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Phase 0 done; Phase 1 (headless Tcl) validated on real Bionic for x86_64, not yet on a device.** See [`docs/status.md`](docs/status.md) for exactly what works today.
+The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Tcl 9.0.4 and Tk 9.0.4 run on a real phone** (widgets, touch, soft keyboard, clipboard, text selection toolbar, scrolling, pinch, vibration/sound API), and any Tcl/Tk app folder packages into its own installable APK. Still open: Starkit/Starpack (Metakit) support, release/AAB hardening, IME composition, low-end device testing. [`docs/status.md`](docs/status.md) says exactly what is verified on a device and what only on the host.
 
 ## Layout
 
@@ -23,7 +23,7 @@ The full plan is in [`docs/roadmap.txt`](docs/roadmap.txt). **Current state: Pha
 
 `tools/pack-app.sh myapp-folder --name "My App"` produces an installable APK; see [docs/packaging.md](docs/packaging.md).
 
-Touch, text selection, the system clipboard and gestures: [docs/touch-and-clipboard.md](docs/touch-and-clipboard.md).
+Touch, text selection, the system clipboard and gestures: [docs/touch-and-clipboard.md](docs/touch-and-clipboard.md). Sound, vibration, lifecycle events and device info: [docs/device-api.md](docs/device-api.md). Porting an existing Tcl 8.6 app: [docs/porting-from-8.6.md](docs/porting-from-8.6.md).
 
 ## Build (headless Tcl for Android — Milestone M0)
 

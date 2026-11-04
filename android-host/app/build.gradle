@@ -12,6 +12,10 @@ plugins {
 //   -Ptcldroid.appAssets=<dir>        contains app/ : the Tcl/Tk app's files (main.tcl, ...)
 //   -Ptcldroid.appRes=<dir>           contains drawable/app_icon.png
 //   -Ptcldroid.appId / appName / appVersion / appCode   the app's identity
+//   -Ptcldroid.keystore=<file>        optional signing key (else the Android debug key);
+//                                     passwords/alias come from the environment so they never
+//                                     appear on a command line: TCLDROID_KS_PASS,
+//                                     TCLDROID_KEY_ALIAS, TCLDROID_KEY_PASS (default: store pass)
 def pinnedNdkDir = providers.gradleProperty('tcldroid.ndk').get()
 def pinnedNdkRev = providers.gradleProperty('tcldroid.ndkVersion').get()
 def jniLibsDir   = providers.gradleProperty('tcldroid.jniLibs').get()
@@ -23,6 +27,7 @@ def appRes       = providers.gradleProperty('tcldroid.appRes').get()
 def appId        = providers.gradleProperty('tcldroid.appId').get()
 def appName      = providers.gradleProperty('tcldroid.appName').get()
 def appVersion   = providers.gradleProperty('tcldroid.appVersion').get()
+def appKeystore  = providers.gradleProperty('tcldroid.keystore').orNull
 def appCode      = providers.gradleProperty('tcldroid.appCode').get().toInteger()
 // A string resource: escape what aapt2 treats specially.
 def appNameXml   = appName.replace('&', '&amp;').replace('<', '&lt;').replace("'", "\\'").replace('"', '\\"')
@@ -66,8 +71,31 @@ android {
         }
     }
 
+    lint {
+        // The release "lint vital" pass downloads its own tooling; a Tcl app's Java is a few
+        // hundred lines we test directly, so skip it (keeps release builds working offline).
+        checkReleaseBuilds false
+    }
+
+    signingConfigs {
+        if (appKeystore != null) {
+            appKey {
+                storeFile file(appKeystore)
+                storePassword System.getenv('TCLDROID_KS_PASS')
+                keyAlias System.getenv('TCLDROID_KEY_ALIAS')
+                keyPassword System.getenv('TCLDROID_KEY_PASS') ?: System.getenv('TCLDROID_KS_PASS')
+            }
+        }
+    }
+
     buildTypes {
-        release { minifyEnabled false }
+        debug {
+            if (appKeystore != null) { signingConfig signingConfigs.appKey }
+        }
+        release {
+            minifyEnabled false
+            if (appKeystore != null) { signingConfig signingConfigs.appKey }
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

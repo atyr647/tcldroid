@@ -11,6 +11,11 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.graphics.Insets;
 import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.view.HapticFeedbackConstants;
+import android.view.SoundEffectConstants;
+import android.view.WindowManager;
 import android.os.Bundle;
 import android.os.Process;
 import android.util.Log;
@@ -27,6 +32,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Hosts Tcl/Tk. Runs the app in assets/app/ (main.tcl), which builds a Tk interface that draws into a
@@ -90,8 +97,17 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         File appDir = new File(getFilesDir(), "app");
         try {
             copyAsset("selftest.tcl");
-            deleteRecursively(appDir);
-            copyAssetTree("app", appDir);
+            // Unpack only when this build of the app is new: copying a large app on every
+            // launch is wasted start-up time. (The folder is the app's code; it is not for data.)
+            File stamp = new File(getFilesDir(), "app.stamp");
+            String now = buildStamp();
+            if (!appDir.isDirectory() || !now.equals(readText(stamp))) {
+                deleteRecursively(appDir);
+                copyAssetTree("app", appDir);
+                try (FileOutputStream out = new FileOutputStream(stamp)) {
+                    out.write(now.getBytes(StandardCharsets.UTF_8));
+                }
+            }
         } catch (IOException e) {
             Log.e(TAG, "cannot unpack the app", e);
             showReport("Cannot start", "Unpacking the app failed:\n" + e);
@@ -238,6 +254,28 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
         });
     }
 
+    /** Changes whenever a different build of the app is installed. */
+    private String buildStamp() {
+        try {
+            android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pi.lastUpdateTime + ":" + (Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode()
+                    : pi.versionCode);
+        } catch (Exception e) {
+            return "unknown:" + System.nanoTime();	// never equal: always unpack
+        }
+    }
+
+    private static String readText(File f) {
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            byte[] buf = new byte[256];
+            for (int n; (n = in.read(buf)) > 0; ) b.write(buf, 0, n);
+            return new String(b.toByteArray(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
     private ClipboardManager clipboard() {
         return (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
     }
@@ -254,6 +292,185 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     protected void onResume() {
         super.onResume();
         TclRuntime.clipboardChanged();	// it may have changed while we were away
+        if (started) {
+            TclRuntime.lifecycle(TclRuntime.LIFE_RESUME);
+        }
+    }
+
+    // ---- feedback: vibration, haptics, sound -------------------------------------------------
+
+    private Sounds sounds;
+
+    private synchronized Sounds sounds() {
+        if (sounds == null) {
+            sounds = new Sounds();
+        }
+        return sounds;
+    }
+
+    private static String path(byte[] utf8) {
+        return new String(utf8, StandardCharsets.UTF_8);
+    }
+
+    @Override
+    public void onVibrate(int ms, int amplitude) {
+        try {
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v != null && v.hasVibrator()) {
+                int amp = amplitude > 0 && v.hasAmplitudeControl() ? amplitude
+                        : VibrationEffect.DEFAULT_AMPLITUDE;
+                v.vibrate(VibrationEffect.createOneShot(ms, amp));
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "vibrate failed", e);
+        }
+    }
+
+    @Override
+    public void onHaptic(final int kind) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                int c;
+                switch (kind) {
+                    case 0: c = HapticFeedbackConstants.CLOCK_TICK; break;
+                    case 2: c = HapticFeedbackConstants.LONG_PRESS; break;
+                    case 3: c = Build.VERSION.SDK_INT >= 30 ? HapticFeedbackConstants.CONFIRM
+                            : HapticFeedbackConstants.CONTEXT_CLICK; break;
+                    case 4: c = Build.VERSION.SDK_INT >= 30 ? HapticFeedbackConstants.REJECT
+                            : HapticFeedbackConstants.LONG_PRESS; break;
+                    default: c = HapticFeedbackConstants.VIRTUAL_KEY; break;
+                }
+                tkView.performHapticFeedback(c);
+            }
+        });
+    }
+
+    @Override
+    public void onSoundPreload(byte[] p) {
+        sounds().preload(path(p));
+    }
+
+    @Override
+    public void onSoundPlay(byte[] p, int volume1000, int rate1000) {
+        sounds().play(path(p), volume1000 / 1000f, rate1000 / 1000f);
+    }
+
+    @Override
+    public void onSoundStop() {
+        sounds().stopAll();
+    }
+
+    @Override
+    public void onBell() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                tkView.playSoundEffect(SoundEffectConstants.CLICK);
+            }
+        });
+    }
+
+    // ---- fullscreen, device facts, lifecycle ------------------------------------------------------
+
+    @Override
+    public void onFullscreen(final boolean on) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    getWindow().getAttributes().layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                }
+                if (Build.VERSION.SDK_INT >= 30) {
+                    android.view.WindowInsetsController c = getWindow().getInsetsController();
+                    if (c != null) {
+                        if (on) {
+                            c.hide(WindowInsets.Type.systemBars());
+                            c.setSystemBarsBehavior(android.view.WindowInsetsController
+                                    .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                        } else {
+                            c.show(WindowInsets.Type.systemBars());
+                        }
+                    }
+                } else {
+                    getWindow().getDecorView().setSystemUiVisibility(on
+                            ? View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            : View.SYSTEM_UI_FLAG_VISIBLE);
+                }
+            }
+        });
+    }
+
+    /** ::tkdroid::info: "key TAB value LF" lines. */
+    @Override
+    public byte[] systemInfo() {
+        StringBuilder sb = new StringBuilder();
+        info(sb, "sdk", String.valueOf(Build.VERSION.SDK_INT));
+        info(sb, "release", Build.VERSION.RELEASE);
+        info(sb, "manufacturer", Build.MANUFACTURER);
+        info(sb, "model", Build.MODEL);
+        info(sb, "abi", Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "");
+        info(sb, "appId", getPackageName());
+        info(sb, "versionName", BuildInfo.VERSION);
+        try {
+            android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            info(sb, "appVersionName", pi.versionName == null ? "" : pi.versionName);
+            info(sb, "appVersionCode", String.valueOf(Build.VERSION.SDK_INT >= 28
+                    ? pi.getLongVersionCode() : pi.versionCode));
+        } catch (Exception ignored) {
+        }
+        info(sb, "filesDir", getFilesDir().getAbsolutePath());
+        info(sb, "cacheDir", getCacheDir().getAbsolutePath());
+        info(sb, "appDir", new File(getFilesDir(), "app").getAbsolutePath());
+        info(sb, "dpi", String.valueOf(getResources().getDisplayMetrics().densityDpi));
+        info(sb, "locale", java.util.Locale.getDefault().toLanguageTag());
+        info(sb, "darkMode", (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES ? "1" : "0");
+        return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void info(StringBuilder sb, String k, String v) {
+        sb.append(k).append('\t').append(v.replace('\n', ' ')).append('\n');
+    }
+
+    private volatile CountDownLatch pauseAck;
+
+    @Override
+    public void onLifecycleDone(int kind) {
+        CountDownLatch l = pauseAck;
+        if (kind == TclRuntime.LIFE_PAUSE && l != null) {
+            l.countDown();
+        }
+    }
+
+    /**
+     * Tell the script it is leaving the foreground (<<AndroidPause>>/<<AndroidSaveState>>) and wait
+     * briefly for it to finish saving: after onPause Android may kill the process at any time.
+     */
+    @Override
+    protected void onPause() {
+        if (started) {
+            CountDownLatch l = new CountDownLatch(1);
+            pauseAck = l;
+            TclRuntime.lifecycle(TclRuntime.LIFE_PAUSE);
+            try {
+                l.await(500, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        super.onPause();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (started && level >= TRIM_MEMORY_RUNNING_LOW) {
+            TclRuntime.lifecycle(TclRuntime.LIFE_LOWMEMORY);
+        }
     }
 
     @Override

@@ -43,7 +43,11 @@ Open(const char *family, int px, int bold, int italic, TkAFontInfo *info)
 	free(f);
 	return NULL;
     }
-    if (FT_New_Face(lib, PathFor(family, bold, italic), 0, &f->face)) {
+    /* The test fonts lack some styles (no sans oblique, no bold italic): fall back. */
+    if (FT_New_Face(lib, PathFor(family, bold, italic), 0, &f->face)
+	    && FT_New_Face(lib, PathFor(family, bold, 0), 0, &f->face)
+	    && FT_New_Face(lib, PathFor(family, 0, 0), 0, &f->face)
+	    && FT_New_Face(lib, PathFor(NULL, 0, 0), 0, &f->face)) {
 	free(f);
 	return NULL;
     }

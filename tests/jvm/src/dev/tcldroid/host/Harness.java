@@ -19,6 +19,15 @@ public class Harness implements TclRuntime.Listener {
     public byte[] getClipboard() { return clip == null ? null : clip.getBytes(StandardCharsets.UTF_8); }
     public void setClipboard(byte[] b) { clip = b == null ? null : new String(b, StandardCharsets.UTF_8); System.err.println("[java] clipboard <- " + clip); }
     public void onTextMenu(int x, int y, int flags) { System.err.println("[java] TEXTMENU " + x + "," + y + " flags=" + flags); }
+    public void onFullscreen(boolean on) { System.err.println("[java] FULLSCREEN " + on); }
+    public void onVibrate(int ms, int amp) { System.err.println("[java] VIBRATE " + ms + " amp=" + amp); }
+    public void onHaptic(int kind) { System.err.println("[java] HAPTIC " + kind); }
+    public void onSoundPreload(byte[] p) { System.err.println("[java] SOUND preload " + new String(p, StandardCharsets.UTF_8)); }
+    public void onSoundPlay(byte[] p, int v, int r) { System.err.println("[java] SOUND play " + new String(p, StandardCharsets.UTF_8) + " vol=" + v + " rate=" + r); }
+    public void onSoundStop() { System.err.println("[java] SOUND stop"); }
+    public void onBell() { System.err.println("[java] BELL"); }
+    public void onLifecycleDone(int kind) { System.err.println("[java] LIFECYCLE done " + kind); }
+    public byte[] systemInfo() { return "sdk\t35\nmodel\tHarness\nfilesDir\t/x y\n".getBytes(StandardCharsets.UTF_8); }
     public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }
     void ppm(String path) throws IOException {
         try (OutputStream o = new BufferedOutputStream(new FileOutputStream(path))) {

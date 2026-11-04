@@ -49,7 +49,31 @@ final class TclRuntime {
 
         /** Show the native Cut/Copy/Paste/Select-all toolbar; flags are TKA_MENU_* bits. */
         void onTextMenu(int x, int y, int flags);
+
+        void onFullscreen(boolean on);
+
+        void onVibrate(int ms, int amplitude);
+
+        /** kind: HAPTIC_* */
+        void onHaptic(int kind);
+
+        void onSoundPreload(byte[] path);
+
+        void onSoundPlay(byte[] path, int volume1000, int rate1000);
+
+        void onSoundStop();
+
+        /** Tk's {@code bell}. */
+        void onBell();
+
+        /** The script has handled lifecycle event {@code kind} (LIFE_*). */
+        void onLifecycleDone(int kind);
+
+        /** Device/app facts as "key TAB value LF" lines (UTF-8). */
+        byte[] systemInfo();
     }
+
+    static final int LIFE_PAUSE = 0, LIFE_RESUME = 1, LIFE_LOWMEMORY = 2;
 
     static final int MENU_CUT = 1, MENU_COPY = 2, MENU_PASTE = 4, MENU_SELECT_ALL = 8;
 
@@ -71,6 +95,8 @@ final class TclRuntime {
     private static native void nativeResize(int width, int height, int dpi);
 
     private static native void nativeClipboardChanged();
+
+    private static native void nativeLifecycle(int kind);
 
     private static native void nativeLongPress(int x, int y);
 
@@ -104,6 +130,8 @@ final class TclRuntime {
     static void resize(int width, int height, int dpi) { nativeResize(width, height, dpi); }
 
     static void clipboardChanged() { nativeClipboardChanged(); }
+
+    static void lifecycle(int kind) { nativeLifecycle(kind); }
 
     static void longPress(int x, int y) { nativeLongPress(x, y); }
 

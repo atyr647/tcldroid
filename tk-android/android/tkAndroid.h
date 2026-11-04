@@ -42,7 +42,21 @@ typedef struct TkAHost {
     /* Show the native text-editing toolbar (Cut/Copy/Paste/Select all) near (x, y) in
      * screen pixels. flags: TKA_MENU_* bits. */
     void (*textMenu)(int x, int y, int flags);
+    /* Device feedback. All optional (NULL = silently nothing). */
+    void (*vibrate)(int ms, int amplitude);	/* amplitude 1..255, 0 = device default */
+    void (*haptic)(int kind);			/* TKA_HAPTIC_*: the system's own haptic patterns */
+    void (*soundPreload)(const char *path);	/* decode a WAV/OGG/MP3 file ahead of time */
+    void (*soundPlay)(const char *path, int volume1000, int rate1000);
+    void (*soundStop)(void);
+    void (*bell)(void);				/* Tk's `bell` */
+    /* The script finished handling a TKA_LIFE_* event (see TkAQueueLifecycle). */
+    void (*lifecycleDone)(int kind);
+    /* Device and app facts as "key<TAB>value<LF>" lines, malloc'd (::tkdroid::device). */
+    char *(*systemInfo)(void);
 } TkAHost;
+
+enum { TKA_HAPTIC_TICK, TKA_HAPTIC_CLICK, TKA_HAPTIC_HEAVY, TKA_HAPTIC_CONFIRM, TKA_HAPTIC_REJECT };
+enum { TKA_LIFE_PAUSE, TKA_LIFE_RESUME, TKA_LIFE_LOWMEMORY };
 
 #define TKA_MENU_CUT 1
 #define TKA_MENU_COPY 2
@@ -94,6 +108,9 @@ void TkAQueueLongPress(int x, int y);
 /* Two-finger pinch. phase: 0 start, 1 update, 2 end; (x, y) the focal point; scale1000 the
  * cumulative scale since the start, times 1000. */
 void TkAQueuePinch(int phase, int x, int y, int scale1000);
+/* The Activity paused / resumed / is short of memory (TKA_LIFE_*): Tk generates
+ * <<AndroidPause>> + <<AndroidSaveState>>, <<AndroidResume>>, <<AndroidLowMemory>> on ".". */
+void TkAQueueLifecycle(int kind);
 /* A choice from the text toolbar: TKA_MENU_CUT, _COPY, _PASTE or _SELECTALL. */
 void TkAQueueTextAction(int action);
 

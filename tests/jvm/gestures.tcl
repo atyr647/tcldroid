@@ -10,5 +10,22 @@ bind . <<Pinch>> {puts "PINCH update %d"}
 bind . <<PinchEnd>> {puts "PINCH end %d"}
 clipboard clear
 clipboard append "from tcl"
+# device feedback, facts, fullscreen, lifecycle
+::tkdroid::vibrate 30 128
+::tkdroid::haptic confirm
+set wav [file join $::env(TMPDIR) beep.wav]
+set fh [open $wav wb]; puts -nonewline $fh RIFF; close $fh
+::tkdroid::sound preload $wav
+::tkdroid::sound play $wav -volume 0.5 -rate 1.5
+::tkdroid::sound stop
+bell
+puts "INFO sdk=[::tkdroid::device sdk] model=[dict get [::tkdroid::device] model] files=[::tkdroid::device filesDir] android=[dict get [::tkdroid::device] android]"
+puts "ERR [catch {::tkdroid::sound play /no/such/file.wav} m] $m"
+puts "ERR [catch {::tkdroid::vibrate 99999} m] $m"
+wm attributes . -fullscreen 1
+bind . <<AndroidPause>> {puts "LIFE pause"}
+bind . <<AndroidSaveState>> {puts "LIFE save"}
+bind . <<AndroidResume>> {puts "LIFE resume"}
+bind . <<AndroidLowMemory>> {puts "LIFE lowmem"}
 puts READY
 vwait forever

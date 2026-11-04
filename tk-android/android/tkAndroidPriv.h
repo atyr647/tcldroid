@@ -94,6 +94,7 @@ void TkAGenerateExpose(TkADrawable *d, TkARect r);	/* r in window coords */
 unsigned long TkANextSerial(void);
 /* generic/tkPointer.c; declared only in the Windows/macOS sections of tkIntPlatDecls.h */
 void TkPointerDeadWindow(TkWindow *winPtr);
+int TkAInitSystemCommands(Tcl_Interp *interp);	/* tkAndroidSystem.c */
 int TkAClipboardCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[]);
 void TkAClipboardChanged(void);	/* tkAndroidSelect.c: the system clipboard changed */
 void TkAFocusLost(TkWindow *winPtr);

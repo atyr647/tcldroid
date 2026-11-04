@@ -14,6 +14,9 @@
 #	  * A two-finger pinch generates <<PinchStart>>, <<Pinch>> and <<PinchEnd>>;
 #	    %d is the cumulative scale factor (1.0 = unchanged) and %x %y the focal point.
 #
+#	  * The Activity lifecycle arrives as <<AndroidPause>>, <<AndroidSaveState>>,
+#	    <<AndroidResume>> and <<AndroidLowMemory>> on ".".
+#
 #	The native side calls ::tkdroid::native; nothing here runs unless the
 #	platform reports a gesture.
 
@@ -238,6 +241,22 @@ proc ::tkdroid::Pinch {phase X Y scale1000} {
     catch {event generate $w $ev -x $x -y $y -data [format %.3f [expr {$scale1000 / 1000.0}]]}
 }
 
+# ---- Activity lifecycle ------------------------------------------------------------------------
+#
+#	<<AndroidPause>>/<<AndroidSaveState>>  the app is leaving the foreground: save now (Android
+#	    may kill the process any time after this; the Activity waits briefly for the handlers)
+#	<<AndroidResume>>                      back in the foreground
+#	<<AndroidLowMemory>>                   the system wants memory back: drop caches
+#	All are generated on ".", so `bind . <<AndroidPause>> {...}` or `bind all` receives them.
+
+proc ::tkdroid::Lifecycle {kind} {
+    set events [lindex {{<<AndroidPause>> <<AndroidSaveState>>} {<<AndroidResume>>} {<<AndroidLowMemory>>}} $kind]
+    foreach ev $events {
+	if {[catch {event generate . $ev} err]} {catch {after idle [list error $err]}}
+	update idletasks
+    }
+}
+
 # ---- entry point for the platform layer ------------------------------------------------------
 
 proc ::tkdroid::native {kind a b c d} {
@@ -245,6 +264,7 @@ proc ::tkdroid::native {kind a b c d} {
 	longpress { LongPress $a $b }
 	pinch { Pinch $a $b $c $d }
 	textaction { TextAction $a }
+	lifecycle { Lifecycle $a }
     }
 }
 

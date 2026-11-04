@@ -13,7 +13,7 @@ proc drag {x y0 y1 {steps 8}} {
 	::tkdroid::touch move $x [expr {$y0 + ($y1-$y0)*$i/$steps}]; update
     }
 }
-proc native {args} {::tkdroid::native {*}$args; update}
+proc gesture {args} {::tkdroid::native {*}$args; update}
 
 # ---- clipboard ------------------------------------------------------------------------
 entry .e -width 30
@@ -67,7 +67,7 @@ check tap-focus {[focus] eq ".t"}
 # long press selects a word; dragging extends it
 set X [expr {$rx + 10 * 8}]; set Y [expr {$ry + 5}]
 ::tkdroid::touch down $X $Y; update
-native longpress $X $Y 0 0
+gesture longpress $X $Y 0 0
 check longpress-selects {[llength [.t tag ranges sel]] == 2}
 check longpress-word {[regexp {^\w+$} [.t get sel.first sel.last]]}
 ::tkdroid::touch up $X $Y; update
@@ -76,23 +76,23 @@ set ::menu {}
 rename ::tkdroid::textmenu ::tkdroid::textmenu_real
 proc ::tkdroid::textmenu {x y f} {set ::menu [list $x $y $f]}
 ::tkdroid::touch down $X $Y; update
-native longpress $X $Y 0 0
+gesture longpress $X $Y 0 0
 ::tkdroid::touch up $X $Y; update
 update; update
 check menu-shown {[llength $::menu] == 3}
 check menu-flags {[lindex $::menu 2] & 8 && [lindex $::menu 2] & 2 && [lindex $::menu 2] & 1}
-native textaction 2 0 0 0
+gesture textaction 2 0 0 0
 check action-copy {[::tkdroid::hostclipboard] eq [.t get sel.first sel.last]}
-native textaction 8 0 0 0
+gesture textaction 8 0 0 0
 check action-selectall {[.t tag ranges sel] eq "1.0 [.t index end]"}
-native textaction 1 0 0 0
+gesture textaction 1 0 0 0
 check action-cut {[.t get 1.0 end] eq "\n"}
 check cut-to-clipboard {[string match "line 1 some*" [::tkdroid::hostclipboard]]}
 # paste enabled when the clipboard has text
 set ::menu {}
 .t insert end "hello world"
 ::tkdroid::touch down $X $Y; update
-native longpress $X $Y 0 0
+gesture longpress $X $Y 0 0
 ::tkdroid::touch up $X $Y; update; update
 check menu-paste-flag {[lindex $::menu 2] & 4}
 destroy .t
@@ -125,7 +125,7 @@ update
 set got {}
 bind .b <<LongPress>> {set got "%x,%y"}
 set bx [expr {[winfo rootx .b] + 10}]; set by [expr {[winfo rooty .b] + 10}]
-native longpress $bx $by 0 0
+gesture longpress $bx $by 0 0
 check longpress-virtual {$got eq "10,10"}
 destroy .b
 
@@ -152,9 +152,9 @@ bind .f <<PinchStart>> {lappend log "start %d"}
 bind .f <<Pinch>> {lappend log "pinch %d"}
 bind .f <<PinchEnd>> {lappend log "end %d"}
 set px [expr {[winfo rootx .f] + 50}]; set py [expr {[winfo rooty .f] + 50}]
-native pinch 0 $px $py 1000
-native pinch 1 $px $py 1500
-native pinch 2 $px $py 1750
+gesture pinch 0 $px $py 1000
+gesture pinch 1 $px $py 1500
+gesture pinch 2 $px $py 1750
 check pinch-events {$log eq {{start 1.000} {pinch 1.500} {end 1.750}}}
 # touchScroll off restores classic behaviour
 destroy .f
@@ -177,5 +177,10 @@ check rotate-landscape {[winfo width .] == 2200 && [winfo height .] == 1080 && [
 ::tkdroid::resize 1080 2200; update
 check rotate-portrait {[winfo width .] == 1080 && [winfo height .] == 2200}
 destroy .rot
+# ---- ::tkdroid:: must not shadow Tcl/Tk commands: scripts inside the namespace would call them ----
+foreach c [info commands ::tkdroid::*] {
+    set t [namespace tail $c]
+    check "no-shadow-$t" {[info commands ::$t] eq ""}
+}
 puts "failures: $fails"
 exit [expr {$fails > 0}]

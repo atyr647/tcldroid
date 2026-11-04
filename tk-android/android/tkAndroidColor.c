@@ -95,10 +95,11 @@ XFreeColors(Display *d, Colormap c, unsigned long *pixels, int n, unsigned long 
 static TkCursor *
 NewCursor(void)
 {
+    static unsigned long nextId = 1;	/* Tk keeps a table keyed by id: each must be unique */
     TkCursor *c = (TkCursor *) ckalloc(sizeof(TkCursor));
 
     memset(c, 0, sizeof(TkCursor));
-    c->cursor = (Tk_Cursor) 1;
+    c->cursor = (Tk_Cursor) nextId++;
     return c;
 }
 

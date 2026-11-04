@@ -13,3 +13,6 @@ local.properties
 .idea/
 /android-host/local.properties
 android-host/**/build/
+
+# Native build cache (CMake/ninja)
+.cxx/

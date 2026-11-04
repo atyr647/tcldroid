@@ -28,6 +28,10 @@ public class GestureHarness {
         Thread.sleep(400);
         System.err.println("[java] --- two fingers cancel the first (no click on Probe)");
         TclRuntime.touch(0, 160, 450); Thread.sleep(50); TclRuntime.touch(3, 160, 450); Thread.sleep(300);
+        System.err.println("[java] --- lifecycle");
+        TclRuntime.lifecycle(TclRuntime.LIFE_PAUSE); Thread.sleep(300);
+        TclRuntime.lifecycle(TclRuntime.LIFE_RESUME); Thread.sleep(300);
+        TclRuntime.lifecycle(TclRuntime.LIFE_LOWMEMORY); Thread.sleep(300);
         System.err.println("[java] done");
         System.exit(0);
     }

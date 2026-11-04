@@ -1,3 +1,0 @@
-/home/user/tcldroid/android-host/app/.cxx/Debug/3kz1n735/arm64-v8a/CMakeFiles/tcldroid.dir
-/home/user/tcldroid/android-host/app/.cxx/Debug/3kz1n735/arm64-v8a/CMakeFiles/edit_cache.dir
-/home/user/tcldroid/android-host/app/.cxx/Debug/3kz1n735/arm64-v8a/CMakeFiles/rebuild_cache.dir

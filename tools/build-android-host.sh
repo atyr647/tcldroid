@@ -7,8 +7,12 @@
 #   APP_DIR      folder with main.tcl (+ files, optional icon.png)   default examples/demo
 #   APP_NAME     launcher label                                      default "Tcl Host"
 #   APP_ID       Android applicationId                               default dev.tcldroid.host
-#   APP_VERSION  versionName                                         default 0.4.0
-#   APP_CODE     versionCode                                         default 9
+#   APP_VERSION  versionName                                         default 0.5.0
+#   APP_CODE     versionCode                                         default 10
+#   APP_KEYSTORE signing key file (else the Android debug key); with TCLDROID_KS_PASS,
+#                TCLDROID_KEY_ALIAS, TCLDROID_KEY_PASS in the environment
+#   APP_BUILD    debug (default) | release (not debuggable; needs APP_KEYSTORE)
+#   APP_AAB      1: build an Android App Bundle (release) instead of an APK
 . "$(dirname "$0")/env.sh"
 
 # Build Tcl only if a library is missing (set FORCE_TCL=1 to rebuild).
@@ -40,8 +44,8 @@ PROPS
 APP_DIR=${APP_DIR:-$TCLDROID_ROOT/examples/demo}
 APP_NAME=${APP_NAME:-Tcl Host}
 APP_ID=${APP_ID:-dev.tcldroid.host}
-APP_VERSION=${APP_VERSION:-0.4.0}
-APP_CODE=${APP_CODE:-9}
+APP_VERSION=${APP_VERSION:-0.5.0}
+APP_CODE=${APP_CODE:-10}
 APP_DIR=$(cd "$APP_DIR" && pwd) || die "APP_DIR not found"
 [ -f "$APP_DIR/main.tcl" ] || die "$APP_DIR/main.tcl not found"
 STAGE="$BUILD_DIR/app-stage"
@@ -51,7 +55,19 @@ rm -rf "$STAGE/assets/app/.git"
 if [ -f "$APP_DIR/icon.png" ]; then cp "$APP_DIR/icon.png" "$STAGE/res/drawable/app_icon.png"
 else cp "$TCLDROID_ROOT/android-host/res-default/drawable/app_icon.png" "$STAGE/res/drawable/app_icon.png"; fi
 
-tasks=("$@"); [ ${#tasks[@]} -gt 0 ] || tasks=(assembleDebug)
+APP_BUILD=${APP_BUILD:-debug}
+if [ -n "${APP_KEYSTORE:-}" ]; then
+  [ -f "$APP_KEYSTORE" ] || die "keystore not found: $APP_KEYSTORE"
+  APP_KEYSTORE=$(cd "$(dirname "$APP_KEYSTORE")" && pwd)/$(basename "$APP_KEYSTORE")
+  [ -n "${TCLDROID_KS_PASS:-}" ] && [ -n "${TCLDROID_KEY_ALIAS:-}" ] || die "set TCLDROID_KS_PASS and TCLDROID_KEY_ALIAS for the keystore"
+fi
+[ "$APP_BUILD" != release ] && [ -z "${APP_AAB:-}" ] || [ -n "${APP_KEYSTORE:-}" ] || die "release builds and bundles need a keystore (tools/make-keystore.sh)"
+tasks=("$@")
+if [ ${#tasks[@]} -eq 0 ]; then
+  if [ -n "${APP_AAB:-}" ]; then tasks=(bundleRelease)
+  elif [ "$APP_BUILD" = release ]; then tasks=(assembleRelease)
+  else tasks=(assembleDebug); fi
+fi
 cd "$TCLDROID_ROOT/android-host"
 ./gradlew --no-daemon "${tasks[@]}" \
   -Ptcldroid.ndk="$NDK_HOME" \
@@ -65,11 +81,17 @@ cd "$TCLDROID_ROOT/android-host"
   -Ptcldroid.appId="$APP_ID" \
   -Ptcldroid.appName="$APP_NAME" \
   -Ptcldroid.appVersion="$APP_VERSION" \
-  -Ptcldroid.appCode="$APP_CODE"
-APK="$TCLDROID_ROOT/android-host/app/build/outputs/apk/debug/app-debug.apk"
+  -Ptcldroid.appCode="$APP_CODE" \
+  ${APP_KEYSTORE:+-Ptcldroid.keystore="$APP_KEYSTORE"}
 mkdir -p "$TCLDROID_ROOT/out"
 safe=$(printf %s "$APP_NAME" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g;s/^-//;s/-$//')
-OUT="$TCLDROID_ROOT/out/${safe:-app}-$APP_VERSION.apk"
+if [ -n "${APP_AAB:-}" ]; then
+  APK="$TCLDROID_ROOT/android-host/app/build/outputs/bundle/release/app-release.aab"
+  OUT="$TCLDROID_ROOT/out/${safe:-app}-$APP_VERSION.aab"
+else
+  APK="$TCLDROID_ROOT/android-host/app/build/outputs/apk/$APP_BUILD/app-$APP_BUILD.apk"
+  OUT="$TCLDROID_ROOT/out/${safe:-app}-$APP_VERSION.apk"
+fi
 [ ! -f "$APK" ] || cp "$APK" "$OUT"
-[ "$APP_ID" != dev.tcldroid.host ] || cp "$APK" "$TCLDROID_ROOT/out/tcldroid-host-debug.apk"
+[ "$APP_ID" != dev.tcldroid.host ] || [ "$APP_BUILD" != debug ] || [ -n "${APP_AAB:-}" ] || cp "$APK" "$TCLDROID_ROOT/out/tcldroid-host-debug.apk"
 log "APK: $OUT"
