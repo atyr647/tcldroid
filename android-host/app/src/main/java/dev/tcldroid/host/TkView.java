@@ -429,6 +429,27 @@ final class TkView extends View {
         }
     }
 
+    /**
+     * Diagnostics for screen-reader problems: if the app folder contains a file named a11y-debug, every
+     * request the screen reader makes is shown on screen as a short message, and so is what Tk did with it.
+     */
+    private Boolean a11yDebug;
+
+    private void a11yToast(String msg) {
+        if (a11yDebug == null) {
+            a11yDebug = new java.io.File(getContext().getFilesDir(), "app/a11y-debug").exists();
+        }
+        if (a11yDebug) {
+            final String m = msg;
+            post(new Runnable() {
+                @Override
+                public void run() {
+                    android.widget.Toast.makeText(getContext(), m, android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
     private final AccessibilityNodeProvider a11yProvider = new AccessibilityNodeProvider() {
         @Override
         public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualId) {
@@ -514,6 +535,8 @@ final class TkView extends View {
                 return TkView.this.performAccessibilityAction(action, args);
             }
             A11ySnapshot.Node n = a11y.nodes.get(virtualId);
+            a11yToast("a11y action " + action + " on #" + virtualId
+                    + (n == null ? " (no such node)" : " " + n.role + " '" + n.label() + "'"));
             if (n == null) {
                 return false;
             }
@@ -556,6 +579,7 @@ final class TkView extends View {
      */
     private void clickNode(A11ySnapshot.Node n) {
         int cx = (n.x1 + n.x2) / 2, cy = (n.y1 + n.y2) / 2;
+        a11yToast("click -> Tk at " + cx + "," + cy);
         TclRuntime.a11yAction(n.id, AccessibilityNodeInfo.ACTION_CLICK, cx + " " + cy);
         sendVirtualEvent(n.id, AccessibilityEvent.TYPE_VIEW_CLICKED);
     }
@@ -563,6 +587,7 @@ final class TkView extends View {
     /** A click on the view itself (some services do this): click what has screen-reader focus. */
     @Override
     public boolean performClick() {
+        a11yToast("performClick on the view; a11y focus = #" + a11yFocusedId);
         A11ySnapshot.Node n = a11y.nodes.get(a11yFocusedId);
         if (n != null && a11yOn) {
             clickNode(n);

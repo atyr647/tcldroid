@@ -284,13 +284,25 @@ proc ::tkdroid::a11y::findRect {id} {
     return $w
 }
 
+# diagnostics: when the app folder holds a file a11y-debug, say what happens (an on-screen message)
+proc ::tkdroid::a11y::dbg {msg} {
+    variable debug
+    if {![info exists debug]} {
+	set debug [expr {[info exists ::tkdroid::appdir] && [file exists [file join $::tkdroid::appdir a11y-debug]]}]
+    }
+    if {$debug} {catch {::tkdroid::request toast text $msg}}
+}
+
 proc ::tkdroid::a11y::tapAt {cx cy} {
+    set under [winfo containing $cx $cy]
+    dbg "Tcl: tap at $cx,$cy over [expr {$under eq "" ? "nothing" : "$under ([winfo class $under])"}]"
     ::tkdroid::touch down $cx $cy
     after 60 [list ::tkdroid::touch up $cx $cy]
 }
 
 proc ::tkdroid::a11y::action {id action text} {
     variable keys; variable last
+    dbg "Tcl: action $action id $id text '$text'"
     # A click arrives with the node's centre (the host's own snapshot): tap there. No bookkeeping needed.
     if {$action == 16 && [regexp {^(-?\d+) (-?\d+)$} $text -> cx cy]} {
 	tapAt $cx $cy

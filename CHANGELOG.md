@@ -4,6 +4,10 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.9.3
+- Accessibility diagnostics: an `a11y-debug` file in the app folder turns on on-screen messages for each step of a
+  screen-reader action (see docs/accessibility.md); a general `toast` request kind.
+
 ## 0.9.2
 - Upstream preparation: the Tk changes are now a 5-patch reviewable series (`upstream/series/`) with explicit
   `TK_ANDROID` platform-header cases in generic code (no more shadowed header names), generated and verified

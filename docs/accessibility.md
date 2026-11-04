@@ -36,6 +36,13 @@ one, which Tk sees as a tap in the middle of that node. Keyboard focus changes a
 - On a canvas, draw words with `text` items (they are readable) and put click bindings on items or tags.
 - Keep the focus meaningful: `focus` the first field of a form or dialog.
 
+## Diagnosing a screen-reader problem
+
+Put an empty file named `a11y-debug` in the app folder and repack. The app then shows a short on-screen message at each
+step of an action: Android asked for it (`a11y action 16 on #12 button 'Start'`), the click was handed to Tk
+(`click -> Tk at x,y`), Tcl received it, and which widget the tap landed on (`Tcl: tap at x,y over .v.flat (Canvas)`).
+If a message is missing, that is where it breaks.
+
 ## How it works (for contributors)
 
 `tk-android/library/a11y.tcl` walks the tree (`::tkdroid::a11y::snapshot`, ~4 ms for a 50-node screen) when

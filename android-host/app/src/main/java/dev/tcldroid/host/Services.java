@@ -69,6 +69,10 @@ final class Services {
                 case "savefile": save(id, a); break;
                 case "permission": permission(id, a); break;
                 case "notify": notify(id, a); break;
+                case "toast":
+                    android.widget.Toast.makeText(act, String.valueOf(a.get("text")), android.widget.Toast.LENGTH_SHORT).show();
+                    TclRuntime.result(id, "ok", "");
+                    break;
                 default: TclRuntime.result(id, "error", "unknown request " + kind);
             }
         } catch (RuntimeException | IOException e) {
