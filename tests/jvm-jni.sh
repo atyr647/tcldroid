@@ -20,9 +20,13 @@ J="$TCLDROID_ROOT/android-host/app/src/main/java/dev/tcldroid/host"
 cp "$TCLDROID_ROOT/android-host/app/src/main/assets/selftest.tcl" "$W/files/assets/"
 SCRIPT="${1:-$TCLDROID_ROOT/examples/demo/main.tcl}"
 cd "$W"
+touch "$W/files/run-selftest"	# the demo then runs its Tcl self-test and logs the verdict (as tests/android-smoke.sh does)
 LD_LIBRARY_PATH="$W/lib" TZ=UTC timeout 60 "$JH/bin/java" -Xcheck:jni -Dfirst.ppm="$W/first.ppm" -Djava.awt.headless=true -Djava.library.path="$W/lib" \
-    -cp classes dev.tcldroid.host.Harness "$W/lib" "$W/files" "$SCRIPT" "$W/frame.ppm"
-echo "exit status: $?"
+    -cp classes dev.tcldroid.host.Harness "$W/lib" "$W/files" "$SCRIPT" "$W/frame.ppm" 2>&1 | tee "$W/demo.out" | grep -v "^\[java\] caret"
+echo "exit status: ${PIPESTATUS[0]}"
+case "$SCRIPT" in */examples/demo/main.tcl)
+  grep -q "TCLDROID_SMOKE: PASS" "$W/demo.out" && echo "PASS demo-selftest-hook" || { echo "FAIL demo-selftest-hook"; grep "SMOKE\|FAIL" "$W/demo.out" | head -5; } ;;
+esac
 
 # Clipboard, long press, toolbar and pinch through the real JNI layer.
 if [ "${GESTURES:-1}" = 1 ]; then

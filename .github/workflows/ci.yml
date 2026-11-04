@@ -1,51 +1,119 @@
-# NOTE: this workflow has never been run. It was written alongside the build
-# scripts in a container that has no emulator; expect to fix details on first use.
+# Every command below is one this repository's scripts run locally; the workflow itself has not yet run on
+# GitHub. Expect to adjust package names/versions on the first run.
 name: ci
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'    # nightly: the slow jobs (AddressSanitizer, Bionic, emulator)
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JOBS: 4
 
 jobs:
-  build:
+  host-tests:
+    name: Tk + JNI tests (host build)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+        with: { distribution: temurin, java-version: '21' }
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build unzip
-      - name: Cache downloads
-        uses: actions/cache@v4
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libfreetype-dev fonts-dejavu-core python3
+      - uses: actions/cache@v4
         with:
           path: .cache
-          key: tcldroid-${{ hashFiles('upstream/versions.env') }}
-      - name: Build Tcl + host APK (arm64-v8a, x86_64)
+          key: tcldroid-host-${{ hashFiles('upstream/versions.env') }}
+      - name: Headless embedding (Tcl on the host)
+        run: tests/host-embed.sh
+      - name: Tk widgets, clipboard, touch, gestures
+        run: tests/tk-host.sh
+      - name: JNI layer (real JNI code on a JVM, -Xcheck:jni)
+        run: tests/jvm-jni.sh
+      - name: Tk's own test suite (9,700 tests; fails only on an unexpected failure)
+        run: tests/tk-suite.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tk-suite-results
+          path: build/tksuite/summary.tsv
+
+  android-build:
+    name: Build and verify APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build unzip python3 pkg-config
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: tcldroid-android-${{ hashFiles('upstream/versions.env') }}
+      - name: Demo host app (arm64-v8a + x86_64)
         run: tools/build-android-host.sh
+      - name: "Notes example, built twice: the APK must be byte-identical (reproducible)"
+        run: |
+          tools/pack-app.sh examples/notes --name Notes --abis arm64-v8a && cp out/Notes-1.0.apk /tmp/n1.apk
+          tools/pack-app.sh examples/notes --name Notes --abis arm64-v8a && cmp out/Notes-1.0.apk /tmp/n1.apk
+      - name: Verify signatures
+        run: for a in out/*.apk; do .cache/android-sdk/build-tools/*/apksigner verify "$a"; done
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: android-host/app/build/outputs/apk/debug/app-debug.apk
+          name: apks
+          path: out/*.apk
 
-  smoke:
-    needs: build
+  asan:
+    name: Tk suite under AddressSanitizer (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libfreetype-dev fonts-dejavu-core python3
+      - uses: actions/cache@v4
+        with: { path: .cache, key: "tcldroid-host-${{ hashFiles('upstream/versions.env') }}" }
+      - run: ASAN=1 JOBS=4 tests/tk-suite.sh
+      - run: "! grep -l 'ERROR: AddressSanitizer' build/tksuite/*.out"
+
+  bionic:
+    name: Tcl and Tk on real Bionic (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build unzip e2fsprogs python3
+      - uses: actions/cache@v4
+        with: { path: .cache, key: "tcldroid-android-${{ hashFiles('upstream/versions.env') }}" }
+      - run: sudo -E tests/bionic-chroot.sh
+
+  emulator:
+    name: Self-test on an x86_64 emulator (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: android-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with:
-          name: app-debug-apk
-          path: apk
+        with: { name: apks, path: apk }
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - name: Run self-test on an x86_64 emulator
-        uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           target: default
-          script: tests/android-smoke.sh apk/app-debug.apk
+          script: tests/android-smoke.sh apk/tcldroid-host-debug.apk

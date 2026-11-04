@@ -73,6 +73,8 @@ HOSTTCL="$BUILD_DIR/install/host/bin/tclsh9.0"
 [ -x "$HOSTTCL" ] || "$TCLDROID_ROOT/tools/build-host-tcl.sh" >/dev/null
 STAGE="$OUT/tk_library"; rm -rf "$STAGE"; mkdir -p "$STAGE"; cp -a "$TK/library/." "$STAGE/"
 cp "$TCLDROID_ROOT"/tk-android/library/*.tcl "$STAGE/"	# Android policy scripts (android.tcl)
+# reproducible: the zip stores file times; pin them
+find "$STAGE" -exec touch -h -d '2000-01-01 00:00:00 UTC' {} +
 cp "$OUT/libtk9.0.so" "$OUT/libtk9.0.so.plain"
 LD_LIBRARY_PATH="$BUILD_DIR/install/host/lib" "$HOSTTCL" <<TCL
 zipfs mkimg {$OUT/libtk9.0.so} {$STAGE} {$STAGE} {} {$OUT/libtk9.0.so.plain}

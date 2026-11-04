@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the host APK on the connected device/emulator, launch it, and wait for
-# the self-test verdict printed by android-host/app/src/main/assets/selftest.tcl.
+# the self-test verdict (TCLDROID_SMOKE: PASS n/n) that examples/demo logs when $HOME/run-selftest exists.
 #   usage: tests/android-smoke.sh [path/to/app-debug.apk]
 # Requires `adb` and exactly one connected device. Exit status: 0 = PASS.
 set -euo pipefail
@@ -15,6 +15,8 @@ adb get-state >/dev/null
 
 adb install -r "$APK" >/dev/null
 adb shell pm clear "$PKG" >/dev/null 2>&1 || true
+# ask the demo to run its self-test at start-up (needs a debuggable build: run-as)
+adb shell run-as "$PKG" sh -c "mkdir -p files && touch files/run-selftest" || true
 adb logcat -c
 adb shell am start -n "$PKG/.MainActivity" >/dev/null
 

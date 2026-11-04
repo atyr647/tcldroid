@@ -23,6 +23,13 @@ because its id is different).
 - Back runs your `wm protocol . WM_DELETE_WINDOW` handler; with no handler the app closes.
 - Keep a distinct `--id` per app and raise `--code` for each update you install over an old one.
 
+More options: `--orientation portrait|landscape|sensor|sensor-portrait|sensor-landscape|auto`,
+`--permission android.permission.X` (repeatable; INTERNET and VIBRATE are always present),
+`--abis "arm64-v8a"` (build and ship fewer ABIs: smaller, faster to build), `--backup` (allow Android cloud
+backup of the app's data; off by default). Icon: `icon.png`, or an **adaptive icon** with
+`icon-foreground.png` plus `--icon-bg '#RRGGBB'`. Every APK carries the third-party licence notices in
+`assets/licenses/THIRD-PARTY-NOTICES.txt`. Builds are **reproducible**: the same inputs give a byte-identical APK.
+
 Launch screen: `--splash '#0B0F1A'` sets its colour (white by default); the app icon is centred on it.
 
 ## Signing and updates

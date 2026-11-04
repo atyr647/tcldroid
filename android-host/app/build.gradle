@@ -12,6 +12,9 @@ plugins {
 //   -Ptcldroid.appAssets=<dir>        contains app/ : the Tcl/Tk app's files (main.tcl, ...)
 //   -Ptcldroid.appRes=<dir>           contains drawable/app_icon.png
 //   -Ptcldroid.appId / appName / appVersion / appCode   the app's identity
+//   -Ptcldroid.manifest=<file>        AndroidManifest.xml rendered by tools/render-manifest.py
+//   -Ptcldroid.genJava=<dir>          generated Java (BuildInfo)
+//   -Ptcldroid.abis=a,b               ABIs to ship
 //   -Ptcldroid.splash=#RRGGBB          launch screen colour (the app icon is centred on it)
 //   -Ptcldroid.keystore=<file>        optional signing key (else the Android debug key);
 //                                     passwords/alias come from the environment so they never
@@ -29,6 +32,9 @@ def appId        = providers.gradleProperty('tcldroid.appId').get()
 def appName      = providers.gradleProperty('tcldroid.appName').get()
 def appVersion   = providers.gradleProperty('tcldroid.appVersion').get()
 def appKeystore  = providers.gradleProperty('tcldroid.keystore').orNull
+def appManifest  = providers.gradleProperty('tcldroid.manifest').get()
+def genJava      = providers.gradleProperty('tcldroid.genJava').get()
+def appAbis      = providers.gradleProperty('tcldroid.abis').get().split(',') as List
 def appSplash    = providers.gradleProperty('tcldroid.splash').orElse('#FFFFFF').get()
 def appCode      = providers.gradleProperty('tcldroid.appCode').get().toInteger()
 // A string resource: escape what aapt2 treats specially.
@@ -49,7 +55,7 @@ android {
         versionName appVersion
         resValue 'string', 'app_name', appNameXml
         resValue 'color', 'tcldroid_splash', appSplash
-        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        ndk { abiFilters(*appAbis) }
         externalNativeBuild {
             cmake { arguments "-DTCL_INSTALL_ROOT=${tclRoot}", "-DTK_BUILD_ROOT=${tkRoot}", "-DTK_ANDROID_DIR=${tkAndroidDir}" }
         }
@@ -59,6 +65,8 @@ android {
         cmake { path 'src/main/cpp/CMakeLists.txt' }
     }
 
+    sourceSets.main.manifest.srcFile appManifest
+    sourceSets.main.java.srcDirs += [genJava]
     sourceSets.main.jniLibs.srcDirs = [jniLibsDir]
     sourceSets.main.assets.srcDirs = ['src/main/assets', appAssets]
     sourceSets.main.res.srcDirs = ['src/main/res', appRes]

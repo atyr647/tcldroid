@@ -2,6 +2,9 @@
 # Turn a Tcl/Tk app folder into its own installable Android APK.
 #   usage: tools/pack-app.sh APPDIR [--name "My App"] [--id com.example.myapp]
 #                                   [--version 1.0] [--code 1]
+#                                   [--orientation portrait|landscape|sensor|auto]
+#                                   [--permission android.permission.CAMERA ...] [--abis "arm64-v8a"]
+#                                   [--icon-bg '#RRGGBB'] [--backup]
 #                                   [--splash '#0b0f19'] [--keystore my.jks --key-alias key0]
 #                                   [--release] [--aab]
 # Signing: without --keystore the APK carries the Android debug key (fine for your own phone;
@@ -13,14 +16,16 @@
 # APPDIR and APPDIR/lib on auto_path, and $env(HOME) pointing at private storage.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-[ $# -ge 1 ] || { sed -n '2,16p' "$0" | sed 's/^# \?//'; exit 2; }
+[ $# -ge 1 ] || { sed -n '2,20p' "$0" | sed 's/^# \?//'; exit 2; }
 dir=$1; shift
-name=""; id=""; version="1.0"; code="1"; ks=""; alias=""; build=debug; aab=""; splash="#FFFFFF"
+name=""; id=""; version="1.0"; code="1"; ks=""; alias=""; build=debug; aab=""; splash="#FFFFFF"; orient=auto; perms=""; abis=""; iconbg="#FFFFFF"; backup=0
 while [ $# -gt 0 ]; do
   case $1 in
     --name) name=$2; shift 2;; --id) id=$2; shift 2;;
     --version) version=$2; shift 2;; --code) code=$2; shift 2;;
     --splash) splash=$2; shift 2;;
+    --orientation) orient=$2; shift 2;; --permission) perms="$perms $2"; shift 2;;
+    --abis) abis=$2; shift 2;; --icon-bg) iconbg=$2; shift 2;; --backup) backup=1; shift;;
     --keystore) ks=$2; shift 2;; --key-alias) alias=$2; shift 2;;
     --release) build=release; shift;; --aab) aab=1; build=release; shift;;
     *) echo "unknown option $1" >&2; exit 2;;
@@ -49,4 +54,4 @@ elif [ "$build" = release ]; then
   echo "--release/--aab need --keystore (see tools/make-keystore.sh)" >&2; exit 1
 fi
 echo "Packing '$name' ($id) $version [$code] from $dir"
-APP_DIR=$dir APP_NAME=$name APP_ID=$id APP_VERSION=$version APP_CODE=$code APP_SPLASH=$splash APP_KEYSTORE=$ks APP_BUILD=$build APP_AAB=$aab exec "$here/build-android-host.sh"
+APP_DIR=$dir APP_NAME=$name APP_ID=$id APP_VERSION=$version APP_CODE=$code APP_ORIENTATION=$orient APP_PERMISSIONS="$perms" APP_ABIS="$abis" APP_ICON_BG=$iconbg APP_BACKUP=$backup APP_SPLASH=$splash APP_KEYSTORE=$ks APP_BUILD=$build APP_AAB=$aab exec "$here/build-android-host.sh"

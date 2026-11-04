@@ -137,4 +137,11 @@ pack .log -fill both -expand 1 -padx 24 -pady 6
 # Back navigation: a handler here would run instead of closing the app.
 # (Left unset on purpose: with no handler, Back finishes the Activity.)
 
+# CI hook: tests/android-smoke.sh creates $HOME/run-selftest (adb run-as); run the self-test at once and
+# log its verdict line (TCLDROID_SMOKE: PASS n/n) to logcat.
+proc autotest {} {
+    runSelftest
+    foreach l [split [.log get 1.0 end] \n] { if {[string match TCLDROID_SMOKE* $l]} { puts $l } }
+}
+if {[file exists [file join $env(HOME) run-selftest]]} { file delete [file join $env(HOME) run-selftest]; after 1000 autotest }
 vwait ::forever
