@@ -129,3 +129,9 @@ Zip-based kits are unpacked by `tools/unkit.py` when packing (`pack-app.sh MyApp
 `package require starkit`. Metakit kits are detected and refused with instructions (`sdx unwrap`). Tested by
 `tests/tk/kit.tcl` and an end-to-end pack of a kit (APK holds the kit's files). Not provided: `vfs`/`vfs::zip`/
 `mk4vfs` packages, compiled extensions inside kits. See docs/starkit.md.
+
+## Decisions (owner)
+
+- Licence: MIT (`LICENSE`); the APK notices were updated to say so.
+- No Play Store release is planned, so the AAB path is kept but its Play upload will not be verified; sideloaded
+  (APK) distribution is the supported route.

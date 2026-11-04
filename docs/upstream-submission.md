@@ -41,7 +41,7 @@ tests run on, so the submission cannot drift from what is tested.
 4. **Tests in Tk's format.** The Android-specific tests (touch, clipboard, gestures, accessibility, dialogs) are in
    `tests/tk/*.tcl` and run by this repository's scripts; they should become `tests/android.test` in tcltest form.
 5. **Licence and copyright.** Tk is BSD-style and contributions to it are made under that licence with the contributor's
-   own copyright; this repository has no `LICENSE` yet (the owner's decision), which must be settled first.
+   own copyright; this repository is MIT-licensed (`LICENSE`), compatible with that, and the code offered upstream is offered under Tk's licence.
 6. **Host side.** The Java host (Activity, JNI, `Paint` text engine) is intentionally not part of Tk; the contract is
    `android/tkAndroid.h`. Upstream needs a minimal reference host or the documented interface only.
 

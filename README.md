@@ -44,3 +44,7 @@ Output lands in `build/install/android-<abi>/` (gitignored). Set `ANDROID_NDK_HO
 - [Dependency inventory](docs/dependency-inventory.md)
 
 Two decisions are waiting on the project owner; they are marked ⚠ in the ADRs.
+
+## Licence
+
+MIT (see `LICENSE`); Tcl and Tk keep their own permissive licence, and the notices ship inside every APK.
