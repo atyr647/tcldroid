@@ -58,6 +58,12 @@ differences (`deviation`) and 14 are not yet understood (`untriaged`: the list t
 | clipboard.test | `selection clear -selection CLIPBOARD` left the old text on the system clipboard |
 | pack.test | an iconified/unmapped toplevel ignored size requests, so geometry managers inside it froze |
 
+## Stress and leak check
+
+Creating and destroying a frame with label, canvas (image, text, oval), text and button 6,300 times
+grows the process by ~170 bytes per cycle (Tcl/Tk object pools, bounded caches). Valgrind (`--leak-check=full`)
+reports **0 bytes definitely lost** and no invalid reads or uninitialised use.
+
 ## Not covered
 
 This runs on the host, not on a device or in an Android emulator; it exercises the platform layer's
