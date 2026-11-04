@@ -61,6 +61,8 @@ typedef struct TkAHost {
     int (*checkPermission)(const char *permission);
     /* What the soft keyboard should offer: TKA_INPUT_*. */
     void (*inputMode)(int mode);
+    /* The screen as an accessibility snapshot (see library/a11y.tcl), sent when it changes. */
+    void (*a11yTree)(const char *snapshot);
 } TkAHost;
 
 enum { TKA_INPUT_CODE, TKA_INPUT_TEXT, TKA_INPUT_NUMBER, TKA_INPUT_EMAIL, TKA_INPUT_URL, TKA_INPUT_PASSWORD };
@@ -124,6 +126,10 @@ void TkAQueueLifecycle(int kind);
 /* Answer to a host->request: status is "ok", "error", "cancelled" or "denied"; payload is text
  * (newline-separated items). Thread-safe; strings are copied. */
 void TkAQueueResult(int id, const char *status, const char *payload);
+/* Accessibility: a screen reader started/stopped (on = 1/0); and an action it asked for on a node
+ * (node id from the snapshot; action is an AccessibilityNodeInfo action constant; text for set-text). */
+void TkAQueueA11yEnable(int on);
+void TkAQueueA11yAction(int id, int action, const char *text);
 /* A choice from the text toolbar: TKA_MENU_CUT, _COPY, _PASTE or _SELECTALL. */
 void TkAQueueTextAction(int action);
 

@@ -251,6 +251,21 @@ PermittedCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/* ::tkdroid::a11ysend snapshot -- hand the accessibility snapshot to the host (see library/a11y.tcl). */
+static int
+A11ySendCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    (void) cd;
+    if (objc != 2) {
+	Tcl_WrongNumArgs(interp, 1, objv, "snapshot");
+	return TCL_ERROR;
+    }
+    if (tkAHost.a11yTree != NULL) {
+	tkAHost.a11yTree(Tcl_GetString(objv[1]));
+    }
+    return TCL_OK;
+}
+
 /* ::tkdroid::inputmode ?code|text|number|email|url|password?  -- what the soft keyboard offers. */
 static int
 InputModeCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
@@ -281,6 +296,7 @@ int
 TkAInitSystemCommands(Tcl_Interp *interp)
 {
     Tcl_CreateObjCommand2(interp, "::tkdroid::inputmode", InputModeCmd, NULL, NULL);
+    Tcl_CreateObjCommand2(interp, "::tkdroid::a11ysend", A11ySendCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::request", RequestCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::permitted", PermittedCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::vibrate", VibrateCmd, NULL, NULL);

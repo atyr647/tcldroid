@@ -84,6 +84,9 @@ final class TclRuntime {
 
         /** What the soft keyboard should offer: 0 code, 1 text, 2 number, 3 email, 4 url, 5 password. */
         void onInputMode(int mode);
+
+        /** The screen as an accessibility snapshot (UTF-8 lines; see tk-android/library/a11y.tcl). */
+        void onA11yTree(byte[] snapshot);
     }
 
     static final int LIFE_PAUSE = 0, LIFE_RESUME = 1, LIFE_LOWMEMORY = 2;
@@ -110,6 +113,10 @@ final class TclRuntime {
     private static native void nativeClipboardChanged();
 
     private static native void nativeLifecycle(int kind);
+
+    private static native void nativeA11yEnable(boolean on);
+
+    private static native void nativeA11yAction(int id, int action, byte[] text);
 
     private static native void nativeResult(int id, byte[] status, byte[] payload);
 
@@ -147,6 +154,12 @@ final class TclRuntime {
     static void clipboardChanged() { nativeClipboardChanged(); }
 
     static void lifecycle(int kind) { nativeLifecycle(kind); }
+
+    /** A screen reader (or other accessibility service) started or stopped. */
+    static void a11yEnable(boolean on) { nativeA11yEnable(on); }
+
+    /** The screen reader asked for an action on a node; action is an AccessibilityNodeInfo constant. */
+    static void a11yAction(int id, int action, String text) { nativeA11yAction(id, action, b(text == null ? "" : text)); }
 
     /** Answer to Listener.onRequest. status: ok, error, cancelled or denied; payload: newline-separated items. */
     static void result(int id, String status, String payload) {

@@ -35,6 +35,16 @@ public class GestureHarness {
         Thread.sleep(400);
         System.err.println("[java] --- two fingers cancel the first (no click on Probe)");
         TclRuntime.touch(0, 160, 450); Thread.sleep(50); TclRuntime.touch(3, 160, 450); Thread.sleep(300);
+        System.err.println("[java] --- accessibility: a screen reader appears; ask for the Probe button by node id");
+        TclRuntime.a11yEnable(true); Thread.sleep(900);
+        int probeId = -1;
+        for (String line : h.a11y.split("\n")) {
+            String[] f = line.split("\t", -1);
+            if (f.length > 8 && f[6].equals("button") && f[8].equals("Probe")) probeId = Integer.parseInt(f[0]);
+        }
+        System.err.println("[java] A11Y probe node " + (probeId > 0 ? "found" : "MISSING") + " flags-ok");
+        if (probeId > 0) { TclRuntime.a11yAction(probeId, 16, null); Thread.sleep(500); }
+        TclRuntime.a11yEnable(false); Thread.sleep(300);
         System.err.println("[java] --- lifecycle");
         TclRuntime.lifecycle(TclRuntime.LIFE_PAUSE); Thread.sleep(300);
         TclRuntime.lifecycle(TclRuntime.LIFE_RESUME); Thread.sleep(300);

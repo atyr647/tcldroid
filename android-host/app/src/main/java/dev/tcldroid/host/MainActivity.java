@@ -321,6 +321,11 @@ public class MainActivity extends Activity implements TclRuntime.Listener, TkVie
     }
 
     @Override
+    public void onA11yTree(byte[] snapshot) {
+        tkView.onA11yTree(new String(snapshot, StandardCharsets.UTF_8));
+    }
+
+    @Override
     public void onInputMode(int mode) {
         tkView.setInputMode(mode);
     }

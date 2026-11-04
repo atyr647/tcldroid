@@ -16,7 +16,7 @@ gcc -shared -fPIC -g -Wall -Wextra -DTCLDROID_HOST_JVM -I"$JH/include" -I"$JH/in
 J="$TCLDROID_ROOT/android-host/app/src/main/java/dev/tcldroid/host"
 "$JH/bin/javac" -nowarn -d "$W/classes" "$TCLDROID_ROOT"/tests/jvm/stubs/android/content/Context.java \
     "$TCLDROID_ROOT"/tests/jvm/stubs/android/content/pm/ApplicationInfo.java \
-    "$J/TclRuntime.java" "$J/ImeBridge.java" "$TCLDROID_ROOT"/tests/jvm/src/dev/tcldroid/host/*.java 2>&1 | grep -v "^Note:" || true
+    "$J/TclRuntime.java" "$J/ImeBridge.java" "$J/A11ySnapshot.java" "$TCLDROID_ROOT"/tests/jvm/src/dev/tcldroid/host/*.java 2>&1 | grep -v "^Note:" || true
 cp "$TCLDROID_ROOT/android-host/app/src/main/assets/selftest.tcl" "$W/files/assets/"
 SCRIPT="${1:-$TCLDROID_ROOT/examples/demo/main.tcl}"
 cd "$W"
@@ -76,7 +76,9 @@ if [ "${GESTURES:-1}" = 1 ]; then
   expect '\[java\] LIFECYCLE done 0' "lifecycle-pause-acknowledged"
   expect '\[tcl\] LIFE resume' "lifecycle-resume-event"
   expect '\[tcl\] LIFE lowmem' "lifecycle-lowmemory-event"
-  [ "$(grep -c '^\[tcl\] PROBE' "$OUT")" = 3 ] && echo "PASS cancel-is-not-a-click" || { echo "FAIL cancel-is-not-a-click"; fail=1; }
+  expect '\[java\] A11Y [0-9]* nodes' "a11y-snapshot-reaches-host"
+  expect 'A11Y probe node found' "a11y-snapshot-contains-the-button"
+  [ "$(grep -c '^\[tcl\] PROBE' "$OUT")" = 4 ] && echo "PASS cancel-is-not-a-click-and-a11y-click-works" || { echo "FAIL cancel-is-not-a-click-and-a11y-click-works"; fail=1; }
   [ $fail = 0 ] || exit 1
 fi
 
@@ -101,3 +103,4 @@ fi
 
 # Keyboard composition logic (pure Java)
 "$JH/bin/java" -cp "$W/classes" dev.tcldroid.host.ImeTest || exit 1
+"$JH/bin/java" -cp "$W/classes" dev.tcldroid.host.A11yTest || exit 1

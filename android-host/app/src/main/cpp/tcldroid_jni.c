@@ -38,7 +38,7 @@ static JavaVM *gVm;
 static jobject gListener;			/* global ref, lives for the process */
 static jmethodID gOnOutput, gOnDone, gAllocFrame, gOnFrame, gOnTitle, gOnBack,
 	gOnMoveToBack, gOnCaret, gOnKeyboard, gGetClip, gSetClip, gTextMenu, gVibrate, gHaptic, gSoundPreload,
-	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen, gRequest, gCheckPerm, gInputMode;
+	gSoundPlay, gSoundStop, gBell, gLifeDone, gSysInfo, gFullscreen, gRequest, gCheckPerm, gInputMode, gA11yTree;
 static jintArray gFrame;			/* global ref */
 static int gFrameW, gFrameH;
 
@@ -350,9 +350,20 @@ InputMode(int mode)
     Check(e);
 }
 
+static void
+A11yTree(const char *snapshot)
+{
+    JNIEnv *e = Env();
+    jbyteArray a = ToByteArray(e, snapshot, (jsize) strlen(snapshot));
+
+    (*e)->CallVoidMethod(e, gListener, gA11yTree, a);
+    (*e)->DeleteLocalRef(e, a);
+    Check(e);
+}
+
 static const TkAHost host = {Present, SetTitle, Fullscreen, BackUnhandled, MoveToBack, Caret, Keyboard,
 	GetClipboard, SetClipboard, TextMenu, Vibrate, Haptic, SoundPreload, SoundPlay, SoundStop,
-	Bell, LifecycleDone, SystemInfo, Request, CheckPermission, InputMode};
+	Bell, LifecycleDone, SystemInfo, Request, CheckPermission, InputMode, A11yTree};
 
 /* ---- text engine: android.graphics.Paint through JNI ----------------------------------- */
 
@@ -581,6 +592,7 @@ Java_dev_tcldroid_host_TclRuntime_nativeStart(JNIEnv *env, jclass clazz,
     gFullscreen = (*env)->GetMethodID(env, lc, "onFullscreen", "(Z)V");
     gRequest = (*env)->GetMethodID(env, lc, "onRequest", "(I[B[B)V");
     gInputMode = (*env)->GetMethodID(env, lc, "onInputMode", "(I)V");
+    gA11yTree = (*env)->GetMethodID(env, lc, "onA11yTree", "([B)V");
     gCheckPerm = (*env)->GetMethodID(env, lc, "checkPermission", "([B)I");
     ec = (*env)->FindClass(env, "dev/tcldroid/host/TextEngine");
     if (ec == NULL) {
@@ -701,4 +713,22 @@ Java_dev_tcldroid_host_TclRuntime_nativeResult(JNIEnv *env, jclass clazz, jint i
     TkAQueueResult(id, st, pl);
     free(st);
     free(pl);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeA11yEnable(JNIEnv *env, jclass clazz, jboolean on)
+{
+    (void) env; (void) clazz;
+    TkAQueueA11yEnable(on ? 1 : 0);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_tcldroid_host_TclRuntime_nativeA11yAction(JNIEnv *env, jclass clazz, jint id, jint action,
+	jbyteArray text)
+{
+    char *t = DupBytes(env, text);
+
+    (void) clazz;
+    TkAQueueA11yAction(id, action, t);
+    free(t);
 }

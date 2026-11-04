@@ -4,6 +4,12 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.9.0
+- **Accessibility**: TalkBack and other screen readers can read and operate Tk apps (roles, names, values,
+  states, rectangles, click/focus/set-text/scroll actions, focus announcements) through an
+  `AccessibilityNodeProvider`; `::tkdroid::accessible` lets an app name, re-role or hide widgets
+  ([docs/accessibility.md](docs/accessibility.md)).
+
 ## 0.8.0
 - `::tkdroid::inputmode`: code / text / number / email / url / password keyboards; **IME composition** (swipe typing,
   suggestions, CJK) inline in `text` mode.

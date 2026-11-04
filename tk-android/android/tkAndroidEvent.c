@@ -176,7 +176,7 @@ TkAQueuePinch(int phase, int x, int y, int scale1000)
 
 typedef struct Res {
     int id;
-    char *status, *payload;
+    char *kind, *status, *payload;
     struct Res *next;
 } Res;
 static Res *resHead, *resTail;
@@ -193,14 +193,38 @@ DupStr(const char *s)
     return d;
 }
 
+static void QueueNamed(const char *kind, int id, const char *status, const char *payload);
+
 void
 TkAQueueResult(int id, const char *status, const char *payload)
+{
+    QueueNamed("result", id, status, payload);
+}
+
+void
+TkAQueueA11yEnable(int on)
+{
+    QueueNamed("a11yenable", on, "", "");
+}
+
+void
+TkAQueueA11yAction(int id, int action, const char *text)
+{
+    char num[16];
+
+    snprintf(num, sizeof(num), "%d", action);
+    QueueNamed("a11yaction", id, num, text != NULL ? text : "");
+}
+
+static void
+QueueNamed(const char *kind, int id, const char *status, const char *payload)
 {
     Res *r = (Res *) calloc(1, sizeof(Res));
 
     if (r == NULL) {
 	return;
     }
+    r->kind = DupStr(kind);
     r->id = id;
     r->status = DupStr(status != NULL ? status : "error");
     r->payload = DupStr(payload != NULL ? payload : "");
@@ -550,7 +574,7 @@ CallScript(const char *kind, int a, int b, int c, int d)
 
 /* ::tkdroid::native result id status payload */
 static void
-DeliverResult(int id, const char *status, const char *payload)
+DeliverResult(const char *kind, int id, const char *status, const char *payload)
 {
     TkMainInfo *mainInfo = TkGetMainInfoList();
     Tcl_Interp *interp = mainInfo != NULL ? mainInfo->interp : NULL;
@@ -561,7 +585,7 @@ DeliverResult(int id, const char *status, const char *payload)
 	return;
     }
     argv[0] = Tcl_NewStringObj("::tkdroid::native", TCL_AUTO_LENGTH);
-    argv[1] = Tcl_NewStringObj("result", TCL_AUTO_LENGTH);
+    argv[1] = Tcl_NewStringObj(kind, TCL_AUTO_LENGTH);
     argv[2] = Tcl_NewIntObj(id);
     argv[3] = Tcl_NewStringObj(status, TCL_AUTO_LENGTH);
     argv[4] = Tcl_NewStringObj(payload, TCL_AUTO_LENGTH);
@@ -755,7 +779,8 @@ CheckProc(void *cd, int flags)
 	Res *res;
 
 	while ((res = PopResult()) != NULL) {
-	    DeliverResult(res->id, res->status, res->payload);
+	    DeliverResult(res->kind, res->id, res->status, res->payload);
+	    free(res->kind);
 	    free(res->status);
 	    free(res->payload);
 	    free(res);

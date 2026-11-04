@@ -14,6 +14,11 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
+import android.os.Bundle;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -323,6 +328,218 @@ final class TkView extends View {
     }
 
     // ---- soft keyboard ---------------------------------------------------------------------------
+
+    // ---- accessibility (TalkBack and other screen readers) -------------------------------------------------------
+    //
+    // Tk draws one bitmap, so to a screen reader the view would be a single blank rectangle. The Tcl side
+    // (tk-android/library/a11y.tcl) describes the widgets; this exposes that description as virtual
+    // accessibility nodes and sends the reader's actions back to Tk.
+
+    private volatile A11ySnapshot a11y = new A11ySnapshot();
+    private volatile boolean a11yOn;
+    private int a11yFocusedId = -2;		// the node TalkBack has put its accessibility focus on
+    private int a11yInputFocusId;
+    private AccessibilityManager accessibilityManager;
+
+    private final AccessibilityManager.AccessibilityStateChangeListener a11yStateListener =
+            new AccessibilityManager.AccessibilityStateChangeListener() {
+                @Override
+                public void onAccessibilityStateChanged(boolean enabled) {
+                    reportAccessibilityState();
+                }
+            };
+
+    private void reportAccessibilityState() {
+        boolean on = accessibilityManager != null && accessibilityManager.isEnabled();
+        if (on != a11yOn) {
+            a11yOn = on;
+            TclRuntime.a11yEnable(on);
+        }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        accessibilityManager = (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (accessibilityManager != null) {
+            accessibilityManager.addAccessibilityStateChangeListener(a11yStateListener);
+        }
+        reportAccessibilityState();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        if (accessibilityManager != null) {
+            accessibilityManager.removeAccessibilityStateChangeListener(a11yStateListener);
+        }
+        super.onDetachedFromWindow();
+    }
+
+    /** From the Tcl thread: the screen changed. */
+    void onA11yTree(final String snapshot) {
+        final A11ySnapshot snap = A11ySnapshot.parse(snapshot);
+        a11y = snap;
+        post(new Runnable() {
+            @Override
+            public void run() {
+                if (accessibilityManager == null || !accessibilityManager.isEnabled()) {
+                    return;
+                }
+                // which node holds Tk's keyboard focus now
+                int focused = 0;
+                for (A11ySnapshot.Node n : snap.nodes.values()) {
+                    if (n.has('f')) {
+                        focused = n.id;
+                    }
+                }
+                if (getParent() != null) {
+                    getParent().notifySubtreeAccessibilityStateChanged(TkView.this, TkView.this,
+                            AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE);
+                }
+                if (focused != 0 && focused != a11yInputFocusId) {
+                    a11yInputFocusId = focused;
+                    sendVirtualEvent(focused, AccessibilityEvent.TYPE_VIEW_FOCUSED);
+                }
+            }
+        });
+    }
+
+    private void sendVirtualEvent(int id, int type) {
+        if (accessibilityManager == null || !accessibilityManager.isEnabled() || getParent() == null) {
+            return;
+        }
+        AccessibilityEvent ev = AccessibilityEvent.obtain(type);
+        onInitializeAccessibilityEvent(ev);
+        ev.setSource(this, id);
+        getParent().requestSendAccessibilityEvent(this, ev);
+    }
+
+    private static String classFor(String role) {
+        switch (role) {
+            case "button": return "android.widget.Button";
+            case "checkbox": return "android.widget.CheckBox";
+            case "radio": return "android.widget.RadioButton";
+            case "edit": return "android.widget.EditText";
+            case "text": return "android.widget.TextView";
+            case "list": return "android.widget.ListView";
+            case "slider": return "android.widget.SeekBar";
+            case "progress": return "android.widget.ProgressBar";
+            default: return "android.view.View";
+        }
+    }
+
+    private final AccessibilityNodeProvider a11yProvider = new AccessibilityNodeProvider() {
+        @Override
+        public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualId) {
+            A11ySnapshot snap = a11y;
+            if (virtualId == View.NO_ID) {
+                AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain(TkView.this);
+                onInitializeAccessibilityNodeInfo(info);
+                for (int id : snap.roots) {
+                    info.addChild(TkView.this, id);
+                }
+                return info;
+            }
+            A11ySnapshot.Node n = snap.nodes.get(virtualId);
+            if (n == null) {
+                return null;
+            }
+            AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain(TkView.this, virtualId);
+            info.setPackageName(getContext().getPackageName());
+            info.setClassName(classFor(n.role));
+            info.setParent(TkView.this, snap.nodes.containsKey(n.parent) ? n.parent : View.NO_ID);
+            for (int c : n.children) {
+                info.addChild(TkView.this, c);
+            }
+            int[] loc = new int[2];
+            getLocationOnScreen(loc);
+            info.setBoundsInScreen(new Rect(loc[0] + n.x1, loc[1] + n.y1, loc[0] + n.x2, loc[1] + n.y2));
+            info.setVisibleToUser(true);
+            info.setEnabled(n.has('e'));
+            info.setFocusable(n.has('x') || n.has('t'));
+            info.setFocused(n.has('f'));
+            info.setClickable(n.has('x'));
+            info.setCheckable(n.has('c'));
+            info.setChecked(n.has('k'));
+            info.setSelected(n.has('s'));
+            info.setScrollable(n.has('l'));
+            info.setPassword(n.has('p'));
+            info.setEditable(n.has('t'));
+            info.setMultiLine(n.has('m'));
+            if (n.role.equals("edit")) {
+                info.setText(n.value);
+                info.setContentDescription(n.text.isEmpty() ? null : n.text);
+            } else if (n.role.equals("checkbox") || n.role.equals("radio")) {
+                info.setText(n.text);
+            } else {
+                info.setText(n.label());
+            }
+            if (n.role.equals("window")) {
+                info.setPaneTitle(n.text);
+            }
+            if (n.has('x')) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+            }
+            if (n.has('x') || n.has('t')) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_FOCUS);
+            }
+            if (n.has('t')) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT);
+            }
+            if (n.has('l')) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD);
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
+            }
+            info.addAction(virtualId == a11yFocusedId
+                    ? AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS
+                    : AccessibilityNodeInfo.AccessibilityAction.ACTION_ACCESSIBILITY_FOCUS);
+            return info;
+        }
+
+        @Override
+        public boolean performAction(int virtualId, int action, Bundle args) {
+            if (virtualId == View.NO_ID) {
+                return TkView.this.performAccessibilityAction(action, args);
+            }
+            A11ySnapshot.Node n = a11y.nodes.get(virtualId);
+            if (n == null) {
+                return false;
+            }
+            switch (action) {
+                case AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS:
+                    a11yFocusedId = virtualId;
+                    sendVirtualEvent(virtualId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED);
+                    invalidate();
+                    return true;
+                case AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS:
+                    if (a11yFocusedId == virtualId) {
+                        a11yFocusedId = -2;
+                    }
+                    sendVirtualEvent(virtualId, AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED);
+                    invalidate();
+                    return true;
+                case AccessibilityNodeInfo.ACTION_CLICK:
+                case AccessibilityNodeInfo.ACTION_FOCUS:
+                case AccessibilityNodeInfo.ACTION_SCROLL_FORWARD:
+                case AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD:
+                    TclRuntime.a11yAction(virtualId, action, null);
+                    return true;
+                case AccessibilityNodeInfo.ACTION_SET_TEXT: {
+                    CharSequence t = args == null ? null
+                            : args.getCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE);
+                    TclRuntime.a11yAction(virtualId, action, t == null ? "" : t.toString());
+                    return true;
+                }
+                default:
+                    return false;
+            }
+        }
+    };
+
+    @Override
+    public AccessibilityNodeProvider getAccessibilityNodeProvider() {
+        return a11yProvider;
+    }
 
     // ---- what kind of text the soft keyboard offers (::tkdroid::inputmode) ---------------------------------------
 

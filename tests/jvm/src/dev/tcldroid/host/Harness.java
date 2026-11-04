@@ -33,6 +33,8 @@ public class Harness implements TclRuntime.Listener {
         lastRequest = id + " " + new String(kind, StandardCharsets.UTF_8);
         System.err.println("[java] REQUEST " + id + " " + new String(kind, StandardCharsets.UTF_8) + " | " + new String(args, StandardCharsets.UTF_8).replace("\n", " ; ").replace("\t", "="));
     }
+    public volatile String a11y = "";
+    public void onA11yTree(byte[] t) { a11y = new String(t, StandardCharsets.UTF_8); System.err.println("[java] A11Y " + a11y.split("\n").length + " nodes"); }
     public void onInputMode(int m) { System.err.println("[java] INPUTMODE " + m); }
     public int checkPermission(byte[] p) { return new String(p, StandardCharsets.UTF_8).endsWith("VIBRATE") ? 1 : 0; }
     public void onCaret(int x, int y, int h) { System.err.println("[java] caret " + x + "," + y + " h=" + h); }

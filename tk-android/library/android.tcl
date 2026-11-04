@@ -362,6 +362,8 @@ proc ::tkdroid::native {kind a b c d} {
 	textaction { TextAction $a }
 	lifecycle { Lifecycle $a }
 	result { Result $a $b $c }
+	a11yenable { ::tkdroid::a11y::enable $a }
+	a11yaction { ::tkdroid::a11y::action $a $b $c }
     }
 }
 
@@ -388,3 +390,6 @@ proc ::tkdroid::install {} {
 }
 
 ::tkdroid::install
+
+# screen-reader support (loaded here so a script can also call ::tkdroid::a11y::snapshot directly)
+source -encoding utf-8 [file join $::tk_library a11y.tcl]
