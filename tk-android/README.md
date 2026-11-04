@@ -1,11 +1,11 @@
 # tk-android
 
-The Tk `android/` platform tree (docs/adr/0002-tk-backend-architecture.md). Copied into the Tk source tree by `tools/fetch-upstream.sh` / `tools/build-tk.sh`.
+The Tk `android/` platform tree (docs/adr/0002-tk-backend-architecture.md). See [`android/README.md`](android/README.md) for the port as a Tk maintainer would read it. Copied into the Tk source tree by `tools/fetch-upstream.sh` / `tools/build-tk.sh`.
 
 | File | Role |
 | --- | --- |
 | `tkAndroid.h` | Public host interface: callbacks, text-engine interface, thread-safe input queues. No Tk internals. |
-| `tkAndroidPort.h`, `tkUnixInt.h`, `tkUnixDefault.h` | Platform headers (shadowing the Unix names so generic code stays unpatched). |
+| `tkAndroidPort.h`, `tkAndroidInt.h`, `tkAndroidDefault.h`, `tkAndroidPriv.h` | Platform headers, selected by `TK_ANDROID` in generic code (upstream patch series). |
 | `tkAndroidWindow.c` | The in-process "X server": window tree, stacking, mapping, exposure, pixmaps, clipping. |
 | `tkAndroidDraw.c` | Software rasteriser behind the Xlib-shaped drawing API; images; text blit. |
 | `tkAndroidRegion.c` | Regions as rectangle lists. |

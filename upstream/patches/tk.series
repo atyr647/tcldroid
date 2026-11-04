@@ -1,4 +1,4 @@
-0001-tkPort-select-android-port.patch
-0002-tkPointer-include-android-platform-header.patch
-0003-tk.tcl-load-android-touch-policy.patch
-0004-tkWindow-destroy-every-window-explicitly-on-android.patch
+0001-tkPort.h-add-TK_ANDROID-and-select-the-Android-platf.patch
+0002-generic-include-the-Android-platform-headers.patch
+0003-tkWindow.c-destroy-every-window-explicitly-on-Androi.patch
+0004-tk.tcl-load-the-Android-touch-policy.patch

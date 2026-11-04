@@ -4,6 +4,11 @@ tcldroid follows [semantic versioning](https://semver.org/) for what [docs/api-s
 lists as *stable*. The version lives in the `VERSION` file; the APK's `versionCode` is
 `major*10000 + minor*100 + patch`.
 
+## 0.9.2
+- Upstream preparation: the Tk changes are now a 5-patch reviewable series (`upstream/series/`) with explicit
+  `TK_ANDROID` platform-header cases in generic code (no more shadowed header names), generated and verified
+  against pristine Tk 9.0.4 (`tools/upstream/`); `android/README.md`; [docs/upstream-submission.md](docs/upstream-submission.md).
+
 ## 0.9.1
 - Accessibility: a screen-reader click now carries the node's own coordinates (no dependence on id bookkeeping on
   the Tcl side); the view itself is no longer a focus/click target for TalkBack, and a click on it activates the

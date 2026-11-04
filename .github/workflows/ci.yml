@@ -33,6 +33,8 @@ jobs:
           key: tcldroid-host-${{ hashFiles('upstream/versions.env') }}
       - name: Headless embedding (Tcl on the host)
         run: tests/host-embed.sh
+      - name: The upstream patch series is current and equals the tested tree
+        run: tools/upstream/verify_series.sh
       - name: Tk widgets, clipboard, touch, gestures
         run: tests/tk-host.sh
       - name: JNI layer (real JNI code on a JVM, -Xcheck:jni)

@@ -1,0 +1,146 @@
+From f6d3b94d32a9459c24c84cc21bcc6300d399ecc4 Mon Sep 17 00:00:00 2001
+From: tcldroid <tcldroid@example.invalid>
+Date: Wed, 4 Nov 2026 17:19:17 +0000
+Subject: [PATCH 2/4] generic: include the Android platform headers
+
+At each place where generic code selects tkWinInt.h / tkMacOSXInt.h / tkUnixInt.h (and default.h's
+platform defaults), add the Android case. tkPointer.c now includes the platform header for Android the
+way it does for macOS: the in-process pointer and grab code needs TkpSetCapture and friends.
+---
+ generic/default.h    | 2 ++
+ generic/tkBind.c     | 2 ++
+ generic/tkCmds.c     | 2 ++
+ generic/tkEvent.c    | 2 ++
+ generic/tkGrab.c     | 2 ++
+ generic/tkPointer.c  | 2 ++
+ generic/tkStubInit.c | 4 ++++
+ generic/tkStubLib.c  | 4 +++-
+ generic/tkWindow.c   | 2 ++
+ 9 files changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/generic/default.h b/generic/default.h
+index c312bc9..a84b768 100644
+--- a/generic/default.h
++++ b/generic/default.h
+@@ -19,6 +19,8 @@
+ #else
+ #   if defined(MAC_OSX_TK)
+ #	include "tkMacOSXDefault.h"
++#   elif defined(TK_ANDROID)
++#	include "tkAndroidDefault.h"
+ #   else
+ #	include "tkUnixDefault.h"
+ #   endif
+diff --git a/generic/tkBind.c b/generic/tkBind.c
+index bad5f80..85a038f 100644
+--- a/generic/tkBind.c
++++ b/generic/tkBind.c
+@@ -21,6 +21,8 @@
+ #include "tkWinInt.h"
+ #elif defined(MAC_OSX_TK)
+ #include "tkMacOSXInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #else /* if defined(__unix__) */
+ #include "tkUnixInt.h"
+ #endif
+diff --git a/generic/tkCmds.c b/generic/tkCmds.c
+index e4b466b..883f6ed 100644
+--- a/generic/tkCmds.c
++++ b/generic/tkCmds.c
+@@ -18,6 +18,8 @@
+ #include "tkWinInt.h"
+ #elif defined(MAC_OSX_TK)
+ #include "tkMacOSXInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #else
+ #include "tkUnixInt.h"
+ #endif
+diff --git a/generic/tkEvent.c b/generic/tkEvent.c
+index ef8d6df..548b883 100644
+--- a/generic/tkEvent.c
++++ b/generic/tkEvent.c
+@@ -19,6 +19,8 @@
+ #include "tkWinInt.h"
+ #elif defined(MAC_OSX_TK)
+ #include "tkMacOSXInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #else
+ #include "tkUnixInt.h"
+ #endif
+diff --git a/generic/tkGrab.c b/generic/tkGrab.c
+index 709a6dc..3914200 100644
+--- a/generic/tkGrab.c
++++ b/generic/tkGrab.c
+@@ -14,6 +14,8 @@
+ 
+ #ifdef _WIN32
+ #include "tkWinInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #elif !defined(MAC_OSX_TK)
+ #include "tkUnixInt.h"
+ #else
+diff --git a/generic/tkPointer.c b/generic/tkPointer.c
+index b77abbe..d1dd073 100644
+--- a/generic/tkPointer.c
++++ b/generic/tkPointer.c
+@@ -20,6 +20,8 @@
+ 
+ #if defined(MAC_OSX_TK)
+ #include "tkMacOSXInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #endif
+ 
+ typedef struct {
+diff --git a/generic/tkStubInit.c b/generic/tkStubInit.c
+index b97ec1d..2d38191 100644
+--- a/generic/tkStubInit.c
++++ b/generic/tkStubInit.c
+@@ -14,8 +14,12 @@
+ #if !(defined(_WIN32) || defined(MAC_OSX_TK))
+ /* UNIX */
+ #define UNIX_TK
++#ifdef TK_ANDROID
++#include "tkAndroidInt.h"
++#else
+ #include "tkUnixInt.h"
+ #endif
++#endif
+ 
+ #ifdef _WIN32
+ #include "tkWinInt.h"
+diff --git a/generic/tkStubLib.c b/generic/tkStubLib.c
+index 4b65c33..8a886ba 100644
+--- a/generic/tkStubLib.c
++++ b/generic/tkStubLib.c
+@@ -21,7 +21,9 @@
+ #include "tkMacOSXInt.h"
+ #endif
+ 
+-#if !(defined(_WIN32) || defined(MAC_OSX_TK))
++#if defined(TK_ANDROID)
++#include "tkAndroidInt.h"
++#elif !(defined(_WIN32) || defined(MAC_OSX_TK))
+ #include "tkUnixInt.h"
+ #endif
+ 
+diff --git a/generic/tkWindow.c b/generic/tkWindow.c
+index 99d8f29..210f3ce 100644
+--- a/generic/tkWindow.c
++++ b/generic/tkWindow.c
+@@ -16,6 +16,8 @@
+ #include "tkPort.h"
+ #ifdef _WIN32
+ #include "tkWinInt.h"
++#elif defined(TK_ANDROID)
++#include "tkAndroidInt.h"
+ #elif !defined(MAC_OSX_TK)
+ #include "tkUnixInt.h"
+ #endif
+-- 
+2.43.0
+

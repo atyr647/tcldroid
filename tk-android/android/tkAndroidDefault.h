@@ -1,5 +1,5 @@
 /*
- * tkUnixDefault.h (Android overlay) --
+ * tkAndroidDefault.h --
  *
  *	Default option values (colours, fonts, borders, ...) for Android.
  *	PROVISIONAL: reuses the Unix defaults unchanged. A density-aware,
@@ -7,7 +7,7 @@
  *	Material-ish colours, larger default paddings for touch) is Phase 2/3
  *	work; see docs/compatibility-policy.md ("Product target").
  */
-#ifndef _TKUNIXDEFAULT_ANDROID
-#define _TKUNIXDEFAULT_ANDROID
+#ifndef _TKANDROIDDEFAULT
+#define _TKANDROIDDEFAULT
 #include "../unix/tkUnixDefault.h"
 #endif

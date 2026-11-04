@@ -1,0 +1,31 @@
+From ea0d62f4b1e6924494c9fdf11cd251b286593e40 Mon Sep 17 00:00:00 2001
+From: tcldroid <tcldroid@example.invalid>
+Date: Wed, 4 Nov 2026 17:19:17 +0000
+Subject: [PATCH 3/4] tkWindow.c: destroy every window explicitly on Android
+
+Tk skips XDestroyWindow for the children of a window being destroyed, relying on the X server to
+destroy them with the parent. A platform that keeps its own window records, like Windows and macOS
+(which are already special-cased here), must see every destroy; otherwise records for dead windows
+stay reachable by the pointer and hit-testing code. Found with AddressSanitizer running window.test.
+---
+ generic/tkWindow.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/generic/tkWindow.c b/generic/tkWindow.c
+index 210f3ce..b007fb3 100644
+--- a/generic/tkWindow.c
++++ b/generic/tkWindow.c
+@@ -1576,7 +1576,9 @@ Tk_DestroyWindow(
+ 	TkWmRemoveFromColormapWindows(winPtr);
+     }
+     if (winPtr->window != None) {
+-#if defined(MAC_OSX_TK) || defined(_WIN32)
++#if defined(MAC_OSX_TK) || defined(_WIN32) || defined(TK_ANDROID)
++	/* Android, like Windows and macOS, keeps its own window records (and the pointer
++	 * module's references to them), so every window must be destroyed explicitly. */
+ 	XDestroyWindow(winPtr->display, winPtr->window);
+ #else
+ 	if ((winPtr->flags & TK_TOP_HIERARCHY)
+-- 
+2.43.0
+

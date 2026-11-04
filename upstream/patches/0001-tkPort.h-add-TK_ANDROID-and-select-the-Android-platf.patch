@@ -1,0 +1,54 @@
+From f385c4298c400f4dd72ded00efb944dc2d5cff0b Mon Sep 17 00:00:00 2001
+From: tcldroid <tcldroid@example.invalid>
+Date: Wed, 4 Nov 2026 17:19:17 +0000
+Subject: [PATCH 1/4] tkPort.h: add TK_ANDROID and select the Android platform
+ header
+
+Android is the third platform, after Windows and macOS, that implements Tk's Xlib API in-process
+instead of talking to an X server. TK_ANDROID is defined for __ANDROID__ builds (and, for desktop
+testing, TK_ANDROID_PORT); it takes the same stub-declaration section as macOS and includes
+tkAndroidPort.h.
+---
+ generic/tkPort.h | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/generic/tkPort.h b/generic/tkPort.h
+index cdc6bea..5c989d3 100644
+--- a/generic/tkPort.h
++++ b/generic/tkPort.h
+@@ -14,6 +14,23 @@
+ #ifndef _TKPORT
+ #define _TKPORT
+ 
++/*
++ * Android. TK_ANDROID selects the Android platform headers wherever generic code chooses between
++ * tkWinInt.h, tkMacOSXInt.h and tkUnixInt.h. (TK_ANDROID_PORT lets the platform layer be built and
++ * tested on a desktop compiler.)
++ *
++ * Android has no X server. Like Windows and macOS it implements Tk's own copy of the Xlib API
++ * in-process, so it takes the same section of the generated stub declarations
++ * (tkIntXlibDecls.h, keyed on MAC_OSX_TCL for historical reasons). The macro must be defined here,
++ * before tk.h pulls those declarations in.
++ */
++#if defined(__ANDROID__) || defined(TK_ANDROID_PORT)
++#   define TK_ANDROID 1
++#   ifndef MAC_OSX_TCL
++#	define MAC_OSX_TCL 1
++#   endif
++#endif
++
+ #if defined(_WIN32)
+ #   include "tkWinPort.h"
+ #endif
+@@ -23,6 +40,8 @@
+ #if !defined(_WIN32)
+ #   if defined(MAC_OSX_TK)
+ #	include "tkMacOSXPort.h"
++#   elif defined(TK_ANDROID)
++#	include "tkAndroidPort.h"
+ #   else
+ #	include "tkUnixPort.h"
+ #   endif
+-- 
+2.43.0
+

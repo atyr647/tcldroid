@@ -1,14 +1,0 @@
---- a/library/tk.tcl	2026-11-04 00:30:40.312001979 +0000
-+++ b/library/tk.tcl	2026-11-04 00:30:40.330680689 +0000
-@@ -846,6 +846,11 @@
-     uplevel \#0 [list source $::ttk::library/ttk.tcl]
- }
- 
-+# Android: touch, selection and gesture policy (tk-android/library/android.tcl).
-+if {[llength [info commands ::tkdroid::textmenu]]} {
-+    uplevel \#0 [list source -encoding utf-8 [file join $::tk_library android.tcl]]
-+}
-+
- 
- # Local Variables:
- # mode: tcl

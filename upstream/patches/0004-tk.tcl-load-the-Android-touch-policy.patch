@@ -1,0 +1,30 @@
+From 888ac1cb919d291ccd771d89db51d9521ea2d6f4 Mon Sep 17 00:00:00 2001
+From: tcldroid <tcldroid@example.invalid>
+Date: Wed, 4 Nov 2026 17:19:17 +0000
+Subject: [PATCH 4/4] tk.tcl: load the Android touch policy
+
+On Android, once everything else is initialised, source library/android.tcl (touch scrolling, long-press
+selection, gestures, accessibility). Does nothing elsewhere.
+---
+ library/tk.tcl | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/library/tk.tcl b/library/tk.tcl
+index 00e21c6..02a6151 100644
+--- a/library/tk.tcl
++++ b/library/tk.tcl
+@@ -846,6 +846,11 @@ if {$::ttk::library ne ""} {
+     uplevel \#0 [list source $::ttk::library/ttk.tcl]
+ }
+ 
++# Android: touch, selection and gesture policy (library/android.tcl).
++if {[llength [info commands ::tkdroid::textmenu]]} {
++    uplevel \#0 [list source -encoding utf-8 [file join $::tk_library android.tcl]]
++}
++
+ 
+ # Local Variables:
+ # mode: tcl
+-- 
+2.43.0
+
