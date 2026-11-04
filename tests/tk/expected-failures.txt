@@ -1,0 +1,54 @@
+# Failures of Tk's own test suite (tests/tk-suite.sh) that are understood and accepted.
+# Format:  <test file> <test name glob> <category> -- <reason>
+# Categories:  na-x11       the test exercises X11/Unix window-manager, embedding or selection protocol
+#                           behaviour that does not exist on Android by design (docs/compatibility-policy.md)
+#              na-env       needs something the harness or the platform does not provide
+#              deviation    a real, known difference; may be fixable later
+#              untriaged    failing, not yet understood: the list to burn down
+# The checker (tests/tk/check-expected.sh) fails the run if a test fails that is NOT matched here.
+
+unixWm.test * na-x11 -- X11 window manager properties, reparenting, frames, WM_PROTOCOLS
+unixEmbed.test * na-x11 -- X11 embedding / containers / reparenting
+unixSelect.test * na-x11 -- X11 selection protocol between clients (INCR, TARGETS over the wire)
+unixFont.test * na-x11 -- XLFD font names and X11 font handling
+systray.test * na-x11 -- system tray protocol (X11/Windows)
+embed.test * na-x11 -- -container / -use embedding
+safePrimarySelection.test * na-x11 -- PRIMARY selection exchanged with another Tk process
+select.test * na-x11 -- selection handed to a second Tk process (childTkProcess)
+safe.test * na-x11 -- safe-interpreter Tk with X11-specific features (send, selection, embedding)
+wm.test * na-x11 -- X11 window manager semantics; hangs at wm-forget-1.5 (unmapped-parent reparenting)
+winfo.test winfo-13.* na-x11 -- embedded toplevels
+winfo.test winfo-5.4 na-x11 -- winfo interps needs `send`/the X registry
+winfo.test winfo-5.5 na-x11 -- winfo interps needs `send`/the X registry
+frame.test frame-3.9 na-x11 -- -use embedding
+frame.test frame-3.10 na-x11 -- -use embedding
+frame.test frame-2.18 untriaged
+tk.test tk-2.3 na-env -- tk appname depends on the executable name of the test process
+tk.test tk-7.* na-env -- tk inactive in a safe interpreter (no X screensaver idle time)
+main.test * na-env -- Tk_MainEx command line handling (wish-specific)
+pkgconfig.test pkgconfig-1.1 na-env -- build configuration strings of the reference build
+fontchooser.test fontchooser-4.* na-env -- the platform font chooser dialog (none on Android yet)
+filebox.test filebox-7.1-0 na-env -- file dialog layout depends on the reference fonts
+clipboard.test clipboard-6.2 na-x11 -- clipboard exchanged with a second Tk process
+imgBmap.test imageBmap-* na-env -- uses relative bitmap files; the harness runs from a copy of the tests
+event.test event-9.* deviation -- crossing events when the pointer window is destroyed (X server synthesises Enter/Leave; ours re-checks at idle)
+event.test event-8a88a19654-* deviation -- same
+event.test event-86299fe7ce* deviation -- same
+bind.test bind-34.1 deviation -- -warp relative to a window
+bind.test bind-15.7 deviation -- modifier-state matching with this platform's keymap
+bind.test bind-32.3 deviation -- modifier-state matching with this platform's keymap
+bind.test bind-33.1* deviation -- modifier-state matching with this platform's keymap
+font.test font-21.* deviation -- Tk_PostscriptFontName for the Android font families
+font.test font-24.* deviation -- text layout with the host test font's space width
+font.test font-30.6 deviation -- text layout with the host test font's space width
+font.test font-31.6 deviation -- text layout with the host test font's space width
+font.test font-44.1 untriaged
+font.test font-45.* untriaged
+font.test font-8.4 untriaged
+text.test text-14.19 untriaged
+text.test text-14.20 untriaged
+textWind.test textWind-10.8 untriaged
+textDisp.test textDisp-6.5 untriaged
+listbox.test listbox-4.7 deviation -- gridded wm geometry (-setgrid) is recorded, not applied
+focus.test focus-1.19 untriaged
+canvText.test canvText-19.1 untriaged

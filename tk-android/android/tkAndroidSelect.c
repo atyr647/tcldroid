@@ -115,6 +115,22 @@ TkSelUpdateClipboard(TkWindow *winPtr, clipboardOption opt)
     }
 }
 
+/* Tk disowned CLIPBOARD on purpose: what it put on the system clipboard goes with it. */
+static int externalChange;	/* set while Tk drops ownership because ANOTHER app replaced the clipboard */
+
+void
+TkAClipboardDisowned(void)
+{
+    if (externalChange) {
+	return;			/* the system clipboard now holds someone else's text: leave it */
+    }
+    if (ourText != NULL) {
+	free(ourText);
+	ourText = NULL;
+	HostSet(NULL);
+    }
+}
+
 /*
  * Tcl thread: the system clipboard changed. If it no longer holds what Tk put there,
  * Tk is no longer the owner.
@@ -133,7 +149,11 @@ TkAClipboardChanged(void)
     same = strcmp(cur != NULL ? cur : "", ourText != NULL ? ourText : "") == 0;
     free(cur);
     if (!same) {
+	externalChange = 1;
 	Tk_ClearSelection(dispPtr->clipWindow, dispPtr->clipboardAtom);
+	externalChange = 0;
+	free(ourText);
+	ourText = NULL;
     }
 }
 

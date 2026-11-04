@@ -1,3 +1,4 @@
 0001-tkPort-select-android-port.patch
 0002-tkPointer-include-android-platform-header.patch
 0003-tk.tcl-load-android-touch-policy.patch
+0004-tkWindow-destroy-every-window-explicitly-on-android.patch

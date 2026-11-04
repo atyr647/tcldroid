@@ -153,6 +153,88 @@ TkAWindowAt(int x, int y)
     return d;
 }
 
+/* ---- the set of live drawables (see TKA_DRAWABLE) ---- */
+
+static uintptr_t *liveTab;
+static size_t liveCap, liveCount, liveUsed;	/* used = live + tombstones */
+#define TOMB ((uintptr_t) 1)
+
+static size_t
+LiveHash(uintptr_t p)
+{
+    return (size_t) ((p >> 4) * 11400714819323198485ull >> 20);
+}
+
+static void
+LiveGrow(void)
+{
+    uintptr_t *old = liveTab;
+    size_t oldCap = liveCap, i;
+
+    liveCap = liveCap ? liveCap * 2 : 1024;
+    liveTab = (uintptr_t *) calloc(liveCap, sizeof(uintptr_t));
+    liveCount = liveUsed = 0;
+    for (i = 0; i < oldCap; i++) {
+	if (old[i] > TOMB) {
+	    TkADrawableRegister((TkADrawable *) old[i]);
+	}
+    }
+    free(old);
+}
+
+void
+TkADrawableRegister(TkADrawable *d)
+{
+    size_t i;
+
+    if ((liveUsed + 1) * 2 > liveCap) {
+	LiveGrow();
+    }
+    for (i = LiveHash((uintptr_t) d) & (liveCap - 1); liveTab[i] > TOMB; i = (i + 1) & (liveCap - 1)) {
+	if (liveTab[i] == (uintptr_t) d) {
+	    return;
+	}
+    }
+    if (liveTab[i] == 0) {
+	liveUsed++;
+    }
+    liveTab[i] = (uintptr_t) d;
+    liveCount++;
+}
+
+void
+TkADrawableUnregister(TkADrawable *d)
+{
+    size_t i;
+
+    if (liveCap == 0) {
+	return;
+    }
+    for (i = LiveHash((uintptr_t) d) & (liveCap - 1); liveTab[i] != 0; i = (i + 1) & (liveCap - 1)) {
+	if (liveTab[i] == (uintptr_t) d) {
+	    liveTab[i] = TOMB;
+	    liveCount--;
+	    return;
+	}
+    }
+}
+
+TkADrawable *
+TkADrawableOf(uintptr_t id)
+{
+    size_t i;
+
+    if (id <= TOMB || liveCap == 0) {
+	return NULL;
+    }
+    for (i = LiveHash(id) & (liveCap - 1); liveTab[i] != 0; i = (i + 1) & (liveCap - 1)) {
+	if (liveTab[i] == id) {
+	    return (TkADrawable *) id;
+	}
+    }
+    return NULL;
+}
+
 /* Paint the window background over r (window coordinates) and mark it dirty. */
 static void
 PaintBackground(TkADrawable *d, TkARect r)
@@ -194,6 +276,34 @@ ExposeWindow(TkADrawable *d, TkARect r)
     }
 }
 
+/* How much of the window shows: the X VisibilityNotify state. */
+static int
+VisibilityOf(TkADrawable *d)
+{
+    TkARegion *clip = TkARegionNew();
+    TkARect win;
+    long area = 0;
+    int i, ox, oy;
+
+    TkAComputeClip(d, clip);
+    TkAWindowOrigin(d, &ox, &oy);
+    win.x1 = ox; win.y1 = oy; win.x2 = ox + d->w; win.y2 = oy + d->h;
+    for (i = 0; i < clip->n; i++) {
+	TkARect r = clip->r[i];
+
+	if (r.x1 < win.x1) r.x1 = win.x1;
+	if (r.y1 < win.y1) r.y1 = win.y1;
+	if (r.x2 > win.x2) r.x2 = win.x2;
+	if (r.y2 > win.y2) r.y2 = win.y2;
+	if (r.x1 < r.x2 && r.y1 < r.y2) {
+	    area += (long) (r.x2 - r.x1) * (long) (r.y2 - r.y1);
+	}
+    }
+    TkARegionFree(clip);
+    return area == 0 ? VisibilityFullyObscured
+	    : area >= (long) d->w * (long) d->h ? VisibilityUnobscured : VisibilityPartiallyObscured;
+}
+
 static void
 ExposeTree(TkADrawable *d)
 {
@@ -203,6 +313,9 @@ ExposeTree(TkADrawable *d)
     full.x1 = full.y1 = 0;
     full.x2 = d->w;
     full.y2 = d->h;
+    if (d->winPtr != NULL && (d->eventMask & VisibilityChangeMask) && TkAIsViewable(d)) {
+	TkAGenerateVisibility(d, VisibilityOf(d));	/* X sends this when a window is mapped */
+    }
     ExposeWindow(d, full);
     for (c = d->first; c != NULL; c = c->next) {
 	if (c->mapped) {
@@ -255,6 +368,7 @@ Tk_MakeWindow(Tk_Window tkwin, Window parent)
     d->w = winPtr->changes.width > 0 ? winPtr->changes.width : 1;
     d->h = winPtr->changes.height > 0 ? winPtr->changes.height : 1;
     d->winPtr = winPtr;
+    TkADrawableRegister(d);
     if (winPtr->dirtyAtts & CWBackPixel) {
 	d->bg = winPtr->atts.background_pixel;
 	d->bgSet = 1;
@@ -281,8 +395,44 @@ Destroy(TkADrawable *d)
 	Destroy(d->first);
     }
     Unlink(d);
+    TkADrawableUnregister(d);
     free(d->pix);
     free(d);
+}
+
+/*
+ * An X server sends Enter/Leave to whatever is under the pointer when the window that was there
+ * disappears. Do the same: look again, once things have settled (idle), and let Tk's pointer module
+ * generate the crossing events.
+ */
+static int pointerRecheckQueued;
+
+static void
+PointerRecheck(void *cd)
+{
+    TkADrawable *d;
+    TkWindow *w = NULL;
+
+    (void) cd;
+    pointerRecheckQueued = 0;
+    if (tkA.ptrX < -1000 || tkA.root == NULL) {
+	return;			/* no pointer (cancelled touch) */
+    }
+    for (d = TkAWindowAt(tkA.ptrX, tkA.ptrY); w == NULL && d != NULL; d = d->parent) {
+	w = d->winPtr;
+    }
+    if (w != NULL) {
+	Tk_UpdatePointer((Tk_Window) w, tkA.ptrX, tkA.ptrY, tkA.ptrState);
+    }
+}
+
+static void
+QueuePointerRecheck(void)
+{
+    if (!pointerRecheckQueued) {
+	pointerRecheckQueued = 1;
+	Tcl_DoWhenIdle(PointerRecheck, NULL);
+    }
 }
 
 int
@@ -298,6 +448,7 @@ XDestroyWindow(Display *display, Window w)
     p = d->parent;
     area = RectOf(d);
     if (d->winPtr != NULL) {
+	QueuePointerRecheck();
 	/* Forget it in the pointer module (last-entered window, grab, capture), as the
 	 * Windows and macOS ports do, or the next touch would use a dead window. */
 	TkPointerDeadWindow(d->winPtr);
@@ -325,6 +476,7 @@ Tk_GetPixmap(Display *display, Drawable drawable, int width, int height, int dep
     d->pix = depth == 1
 	    ? (uint32_t *) calloc((size_t) d->w * (size_t) d->h, sizeof(uint32_t))
 	    : (uint32_t *) malloc((size_t) d->w * (size_t) d->h * sizeof(uint32_t));
+    TkADrawableRegister(d);
     return (Pixmap) TKA_ID(d);
 }
 
@@ -335,6 +487,7 @@ Tk_FreePixmap(Display *display, Pixmap pixmap)
 
     (void) display;
     if (d != NULL) {
+	TkADrawableUnregister(d);
 	free(d->pix);
 	free(d);
     }
@@ -724,7 +877,9 @@ TkpScanWindowId(Tcl_Interp *interp, const char *string, Window *idPtr)
 
     v = strtoull(string, &end, 0);
     if (end == string || *end != '\0' || v == 0) {
-	Tcl_SetObjResult(interp, Tcl_ObjPrintf("expected integer but got \"%s\"", string));
+	if (interp != NULL) {	/* callers may probe with no interpreter */
+	    Tcl_SetObjResult(interp, Tcl_ObjPrintf("expected integer but got \"%s\"", string));
+	}
 	return TCL_ERROR;
     }
     *idPtr = (Window) v;

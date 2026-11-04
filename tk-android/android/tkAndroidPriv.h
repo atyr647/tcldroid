@@ -47,7 +47,14 @@ typedef struct TkADrawable {
     uint32_t *pix;		/* pixel storage (pixmaps, and the root) */
 } TkADrawable;
 
-#define TKA_DRAWABLE(id)	((TkADrawable *)(uintptr_t)(id))
+/* A Window/Pixmap id is the address of its TkADrawable, but Tk may still hold an id after the drawable
+ * is gone (it destroys a window subtree in an order the X server tolerates). TkADrawableOf checks the id
+ * against the set of live drawables and returns NULL for a stale one. */
+struct TkADrawable;
+struct TkADrawable *TkADrawableOf(uintptr_t id);
+void TkADrawableRegister(struct TkADrawable *d);
+void TkADrawableUnregister(struct TkADrawable *d);
+#define TKA_DRAWABLE(id)	(TkADrawableOf((uintptr_t)(id)))
 #define TKA_ID(d)		((Window)(uintptr_t)(d))
 
 typedef struct TkAState {
@@ -90,6 +97,7 @@ void TkADrawText(Display *display, Drawable drawable, GC gc, void *platformFont,
 
 /* ---- events ------------------------------------------------------------------ */
 
+void TkAGenerateVisibility(TkADrawable *d, int state);
 void TkAGenerateExpose(TkADrawable *d, TkARect r);	/* r in window coords */
 unsigned long TkANextSerial(void);
 /* generic/tkPointer.c; declared only in the Windows/macOS sections of tkIntPlatDecls.h */
@@ -98,7 +106,8 @@ void TkAFlushTextCache(void);	/* tkAndroidDraw.c */
 void TkAReady(void);	/* tkAndroidEvent.c: release the start-up frame hold */
 int TkAInitSystemCommands(Tcl_Interp *interp);	/* tkAndroidSystem.c */
 int TkAClipboardCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[]);
-void TkAClipboardChanged(void);	/* tkAndroidSelect.c: the system clipboard changed */
+void TkAClipboardChanged(void);
+void TkAClipboardDisowned(void);	/* tkAndroidSelect.c: the system clipboard changed */
 void TkAFocusLost(TkWindow *winPtr);
 TkWindow *TkAActiveTop(void);
 void TkAHandleBack(void);

@@ -218,6 +218,21 @@ TkAGenerateExpose(TkADrawable *d, TkARect r)
     Tk_QueueWindowEvent(&ev, TCL_QUEUE_TAIL);
 }
 
+void
+TkAGenerateVisibility(TkADrawable *d, int state)
+{
+    XEvent ev;
+
+    memset(&ev, 0, sizeof(ev));
+    ev.type = VisibilityNotify;
+    ev.xvisibility.serial = TkANextSerial();
+    ev.xvisibility.send_event = False;
+    ev.xvisibility.display = tkA.display;
+    ev.xvisibility.window = TKA_ID(d);
+    ev.xvisibility.state = state;
+    Tk_QueueWindowEvent(&ev, TCL_QUEUE_TAIL);
+}
+
 static void
 FocusEvent(TkWindow *top, int in)
 {
@@ -350,14 +365,43 @@ XQueryPointer(Display *d, Window w, Window *root, Window *child, int *rx, int *r
 
 int XWarpPointer(Display *d, Window s, Window dw, int sx, int sy, unsigned w, unsigned h, int dx, int dy)
 { (void) d; (void) s; (void) dw; (void) sx; (void) sy; (void) w; (void) h; (void) dx; (void) dy; return 1; }
-void TkpWarpPointer(TkDisplay *dispPtr) { (void) dispPtr; }
+/*
+ * `event generate ... -warp 1`: move the (virtual) pointer and let Tk generate the crossing events,
+ * as the macOS port does after CGWarpMouseCursorPosition.
+ */
+void
+TkpWarpPointer(TkDisplay *dispPtr)
+{
+    int x, y;
+    Tk_Window w;
+
+    if (dispPtr->warpWindow != NULL) {
+	Tk_GetRootCoords(dispPtr->warpWindow, &x, &y);
+	x += dispPtr->warpX;
+	y += dispPtr->warpY;
+    } else {
+	x = dispPtr->warpX;
+	y = dispPtr->warpY;
+    }
+    tkA.ptrX = x;
+    tkA.ptrY = y;
+    w = dispPtr->warpMainwin != NULL ? Tk_CoordsToWindow(x, y, dispPtr->warpMainwin) : NULL;
+    Tk_UpdatePointer(w, x, y, tkA.ptrState);
+}
 void TkpSetCursor(TkpCursor cursor) { (void) cursor; }
 /* An entry/text widget with the focus placed its insertion caret: the host shows the soft keyboard. */
 void
 Tk_SetCaretPos(Tk_Window tkwin, int x, int y, int height)
 {
     int rx, ry;
+    TkWindow *winPtr = (TkWindow *) tkwin;
+    TkDisplay *dispPtr = winPtr->dispPtr;
 
+    /* `tk caret` reports this record, as on the other platforms (unix/tkUnixKey.c) */
+    dispPtr->caret.winPtr = winPtr;
+    dispPtr->caret.x = x;
+    dispPtr->caret.y = y;
+    dispPtr->caret.height = height;
     UpdateKeyboard();
     if (tkAHost.caret != NULL) {
 	Tk_GetRootCoords(tkwin, &rx, &ry);
@@ -1029,9 +1073,26 @@ TextMenuCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
     return TCL_OK;
 }
 
+/*
+ * The test build of libtk (tools/build-tk.sh with TKTEST=1) also contains Tk's own test commands
+ * (tkTest.c: testborder, testfont, square, ...). A library file can be load'ed under one name
+ * only, so they are started with ::tkdroid::tktestinit. Absent (weak, NULL) in normal builds.
+ */
+extern int Tktest_Init(Tcl_Interp *interp) __attribute__((weak));
+
+static int
+TkTestInitCmd(void *cd, Tcl_Interp *interp, Tcl_Size objc, Tcl_Obj *const objv[])
+{
+    (void) cd; (void) objc; (void) objv;
+    return Tktest_Init(interp);
+}
+
 int
 TkAInitCommands(Tcl_Interp *interp)
 {
+    if (Tktest_Init != NULL) {
+	Tcl_CreateObjCommand2(interp, "::tkdroid::tktestinit", TkTestInitCmd, NULL, NULL);
+    }
     Tcl_CreateObjCommand2(interp, "::tkdroid::textmenu", TextMenuCmd, NULL, NULL);
     Tcl_CreateObjCommand2(interp, "::tkdroid::ready", ReadyCmd, NULL, NULL);
     TkAInitSystemCommands(interp);

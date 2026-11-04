@@ -103,11 +103,153 @@ NewCursor(void)
     return c;
 }
 
+/* The names of Tk's cursors: X11's cursor font (77) and Tk's own extras. There is no pointer on a
+ * touch screen, so no cursor is ever shown, but a script's cursor spec is still validated exactly as
+ * upstream does (unix/tkUnixCursor.c), so a typo is an error here as on every other platform. */
+static const char *const cursorNames[] = {
+    "X_cursor",
+    "arrow",
+    "based_arrow_down",
+    "based_arrow_up",
+    "boat",
+    "bogosity",
+    "bottom_left_corner",
+    "bottom_right_corner",
+    "bottom_side",
+    "bottom_tee",
+    "box_spiral",
+    "center_ptr",
+    "circle",
+    "clock",
+    "coffee_mug",
+    "cross",
+    "cross_reverse",
+    "crosshair",
+    "diamond_cross",
+    "dot",
+    "dotbox",
+    "double_arrow",
+    "draft_large",
+    "draft_small",
+    "draped_box",
+    "exchange",
+    "fleur",
+    "gobbler",
+    "gumby",
+    "hand1",
+    "hand2",
+    "heart",
+    "icon",
+    "iron_cross",
+    "left_ptr",
+    "left_side",
+    "left_tee",
+    "leftbutton",
+    "ll_angle",
+    "lr_angle",
+    "man",
+    "middlebutton",
+    "mouse",
+    "pencil",
+    "pirate",
+    "plus",
+    "question_arrow",
+    "right_ptr",
+    "right_side",
+    "right_tee",
+    "rightbutton",
+    "rtl_logo",
+    "sailboat",
+    "sb_down_arrow",
+    "sb_h_double_arrow",
+    "sb_left_arrow",
+    "sb_right_arrow",
+    "sb_up_arrow",
+    "sb_v_double_arrow",
+    "shuttle",
+    "sizing",
+    "spider",
+    "spraycan",
+    "star",
+    "target",
+    "tcross",
+    "top_left_arrow",
+    "top_left_corner",
+    "top_right_corner",
+    "top_side",
+    "top_tee",
+    "trek",
+    "ul_angle",
+    "umbrella",
+    "ur_angle",
+    "watch",
+    "xterm",
+    "none",
+    "myarrow",
+    NULL
+};
+
 TkCursor *
 TkGetCursorByName(Tcl_Interp *interp, Tk_Window tkwin, const char *string)
 {
-    (void) interp; (void) tkwin; (void) string;
-    return NewCursor();
+    Tcl_Size argc;
+    const char **argv = NULL;
+    TkCursor *result = NULL;
+    XColor color;
+    int known = 0, i;
+
+    if (Tcl_SplitList(interp, string, &argc, &argv) != TCL_OK) {
+	return NULL;
+    }
+    if (argc == 0) {
+	goto bad;
+    }
+    if (argv[0][0] == '@') {
+	/* a cursor from bitmap files: {src fg} or {src mask fg bg}; files are not read here */
+	if (Tcl_IsSafe(interp)) {
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj(
+		    "cannot get cursor from a file in a safe interpreter", TCL_AUTO_LENGTH));
+	    Tcl_SetErrorCode(interp, "TK", "SAFE", "CURSOR_FILE", (char *) NULL);
+	    goto done;
+	}
+	if (argc != 2 && argc != 4) {
+	    goto bad;
+	}
+    } else {
+	if (argc > 3) {
+	    goto bad;
+	}
+	for (i = 0; cursorNames[i] != NULL; i++) {
+	    if (strcmp(cursorNames[i], argv[0]) == 0) {
+		known = 1;
+		break;
+	    }
+	}
+	if (!known) {
+	    goto bad;
+	}
+    }
+    for (i = (argv[0][0] == '@' ? (int) argc - 2 : 1); i < (int) argc; i++) {
+	if (argv[0][0] == '@' && i < (int) argc - 2) {
+	    continue;
+	}
+	if (TkParseColor(Tk_Display(tkwin), Tk_Colormap(tkwin), argv[i], &color) == 0) {
+	    Tcl_SetObjResult(interp, Tcl_ObjPrintf("invalid color name \"%s\"", argv[i]));
+	    Tcl_SetErrorCode(interp, "TK", "CURSOR", "COLOR", (char *) NULL);
+	    goto done;
+	}
+    }
+    result = NewCursor();
+    goto done;
+
+  bad:
+    Tcl_SetObjResult(interp, Tcl_ObjPrintf("bad cursor spec \"%s\"", string));
+    Tcl_SetErrorCode(interp, "TK", "VALUE", "CURSOR", (char *) NULL);
+  done:
+    if (argv != NULL) {
+	ckfree(argv);
+    }
+    return result;
 }
 
 TkCursor *
@@ -125,7 +267,17 @@ int XFreeCursor(Display *d, Cursor c) { (void) d; (void) c; return 1; }
 
 /* ---- selection owner and window properties (the clipboard itself is tkAndroidSelect.c) -------------------------- */
 
-int XSetSelectionOwner(Display *d, Atom a, Window w, Time t) { (void) d; (void) a; (void) w; (void) t; return 1; }
+/* Tk gave up an owner of CLIPBOARD (selection clear -selection CLIPBOARD): empty the system one too,
+ * or `clipboard get` would still find the old text there. */
+int
+XSetSelectionOwner(Display *d, Atom a, Window w, Time t)
+{
+    (void) d; (void) t;
+    if (w == None && tkA.dispPtr != NULL && a == tkA.dispPtr->clipboardAtom) {
+	TkAClipboardDisowned();
+    }
+    return 1;
+}
 int XChangeProperty(Display *d, Window w, Atom a1, Atom a2, int i1, int i2, const unsigned char *c, int i3)
 { (void) d; (void) w; (void) a1; (void) a2; (void) i1; (void) i2; (void) c; (void) i3; return 1; }
 int XDeleteProperty(Display *d, Window w, Atom a) { (void) d; (void) w; (void) a; return 1; }

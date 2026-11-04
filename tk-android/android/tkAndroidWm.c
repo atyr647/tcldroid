@@ -53,7 +53,16 @@ Apply(WmInfo *w)
     TkWindow *wp = w->winPtr;
     int x, y, wd, ht;
 
-    if (IsMain(w)) {
+    /* TKDROID_DESKTOP_WM=1 (tests only): "." is sized like any toplevel instead of filling the
+     * screen, so Tk's own test suite, which assumes ordinary toplevels, measures widget logic. */
+    static int desktop = -1;
+
+    if (desktop < 0) {
+	const char *e = getenv("TKDROID_DESKTOP_WM");
+
+	desktop = e != NULL && e[0] == '1';
+    }
+    if (IsMain(w) && !desktop) {
 	x = y = 0;
 	wd = tkA.width;
 	ht = tkA.height;
@@ -83,7 +92,10 @@ RequestProc(void *cd, Tk_Window tkwin)
     WmInfo *w = (WmInfo *) ((TkWindow *) tkwin)->wmInfoPtr;
 
     (void) cd;
-    if (w != NULL && (w->winPtr->flags & TK_MAPPED)) {
+    /* An unmapped (withdrawn, iconified, not yet shown) toplevel still takes its requested size, so
+     * that geometry managers inside it keep arranging their windows; mapping it later must not change
+     * what `winfo width` said meanwhile. */
+    if (w != NULL && w->winPtr->window != None) {
 	Apply(w);
     }
 }

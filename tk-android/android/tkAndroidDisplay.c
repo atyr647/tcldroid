@@ -12,6 +12,7 @@
 #define _GNU_SOURCE	/* Dl_info / dladdr on glibc */
 #endif
 #include "tkAndroidPriv.h"
+#include "tkBusy.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
@@ -90,6 +91,7 @@ XkbOpenDisplay(const char *name, int *ev, int *err, int *major, int *minor,
     if (tkA.root == NULL) {
 	tkA.root = (TkADrawable *) calloc(1, sizeof(TkADrawable));
 	tkA.root->isWindow = 1;
+	TkADrawableRegister(tkA.root);
 	tkA.root->depth = 24;
 	tkA.root->mapped = 1;
 	tkA.root->w = tkA.width;
@@ -355,15 +357,38 @@ int XSetCommand(Display *d, Window w, char **argv, int argc) { (void) d; (void) 
 void XSetWMClientMachine(Display *d, Window w, XTextProperty *p) { (void) d; (void) w; (void) p; }
 Status XStringListToTextProperty(char **list, int count, XTextProperty *p) { (void) list; (void) count; (void) p; return 0; }
 
-/* ---- busy windows (`tk busy`): not yet implemented ------------------------------------ */
-
+/*
+ * ---- busy windows (`tk busy`) ----
+ * A busy window is a transparent InputOnly window stacked over its reference window: it takes the
+ * pointer events (and shows the busy cursor) so nothing underneath reacts. TkpMakeTransparentWindowExist
+ * is in tkAndroidWindow.c; the rest follows unix/tkUnixEmbed.c.
+ */
 void
 TkpCreateBusy(Tk_FakeWin *winPtr, Tk_Window tkRef, Window *parentPtr,
 	Tk_Window tkParent, TkBusy busy)
 {
-    (void) winPtr; (void) tkRef; (void) parentPtr; (void) tkParent; (void) busy;
-    TkAStubCalled("TkpCreateBusy");
+    (void) winPtr; (void) tkRef; (void) busy;
+    *parentPtr = Tk_WindowId(tkParent);
 }
 
-void TkpHideBusyWindow(TkBusy busy) { (void) busy; }
-void TkpShowBusyWindow(TkBusy busy) { (void) busy; }
+void
+TkpHideBusyWindow(TkBusy busy)
+{
+    Busy *busyPtr = (Busy *) busy;
+
+    if (busyPtr->tkBusy != NULL) {
+	Tk_UnmapWindow(busyPtr->tkBusy);
+    }
+}
+
+void
+TkpShowBusyWindow(TkBusy busy)
+{
+    Busy *busyPtr = (Busy *) busy;
+
+    if (busyPtr->tkBusy != NULL) {
+	Tk_MapWindow(busyPtr->tkBusy);
+	/* new siblings may have been created since: always raise */
+	XRaiseWindow(Tk_Display(busyPtr->tkBusy), Tk_WindowId(busyPtr->tkBusy));
+    }
+}

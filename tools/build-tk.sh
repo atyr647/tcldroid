@@ -36,13 +36,23 @@ FLAGS="$DEFS -DBUILD_tk -DUSE_TCL_STUBS -DTK_LIBRARY=\"//zipfs:/lib/tk\" -fPIC -
 
 compile_one() {
   src="$1"; o="$OUT/obj/$(basename "$(dirname "$src")")_$(basename "$src" .c).o"
+  case "$src" in */gen/tkTest.c) INC="-I$(dirname "$src")";; *) INC="";; esac
   if [ ! -f "$o" ] || [ "$src" -nt "$o" ] || [ -n "${FORCE:-}" ] || [ "$TK/android/tkAndroidPriv.h" -nt "$o" ] || [ "$TK/android/tkAndroid.h" -nt "$o" ]; then
-    $CC $FLAGS -c "$src" -o "$o" 2>"$o.err" || { echo "FAILED: $src"; sed 's/^/    /' "$o.err" | head -25; return 1; }
+    $CC $FLAGS $INC -c "$src" -o "$o" 2>"$o.err" || { echo "FAILED: $src"; sed 's/^/    /' "$o.err" | head -25; return 1; }
   fi
 }
 export -f compile_one; export CC FLAGS OUT TK FORCE
 log "compiling Tk for $mode"
-"$TCLDROID_ROOT/tools/tk-sources.sh" --with-android | xargs -P"$(nproc)" -I{} bash -c 'compile_one {}' 2>&1 | tee "$OUT/compile.log" | head -80
+# TKTEST=1: also build Tk's own test commands (tkTest.c, tkSquare.c, as in upstream's tktest). tkTest.c's
+# X11-only commands (testmenubar, testsend, testwrapper) need Tk's Unix window manager, which this
+# port does not have, so they are cut from a copy.
+TKTEST_SRCS=""
+if [ -n "${TKTEST:-}" ]; then
+  sed 's/!defined(__CYGWIN__) && !defined(MAC_OSX_TK)/0/; s/!(defined(_WIN32) || defined(MAC_OSX_TK) || defined(__CYGWIN__))/0/' \
+    "$TK/generic/tkTest.c" > "$OUT/gen/tkTest.c"
+  TKTEST_SRCS="$OUT/gen/tkTest.c $TK/generic/tkSquare.c $TCLDROID_ROOT/tests/tk/tktest-support.c"
+fi
+{ "$TCLDROID_ROOT/tools/tk-sources.sh" --with-android; for f in $TKTEST_SRCS; do echo "$f"; done; } | xargs -P"$(nproc)" -I{} bash -c 'compile_one {}' 2>&1 | tee "$OUT/compile.log" | head -80
 [ -z "$(grep FAILED "$OUT/compile.log")" ] || die "compile errors (see above)"
 
 link() { $CC -shared -o "$OUT/libtk9.0.so" "$OUT"/obj/*.o ${1:-} -L"$TCLINST/lib" -ltclstub $LINKLIBS; }

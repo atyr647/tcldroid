@@ -38,6 +38,10 @@ check clip-paste-widget {[.e get] eq "other app text"}
 clipboard clear
 clipboard append "x"
 check clip-reclaim {[clipboard get] eq "x" && [::tkdroid::hostclipboard] eq "x"}
+selection clear -selection CLIPBOARD
+check clip-selection-clear-empties-system {[::tkdroid::hostclipboard] eq "" && [catch {clipboard get}]}
+clipboard clear
+clipboard append "x"
 check clip-get-bad-type {[catch {clipboard get -type NOSUCH}]}
 destroy .e
 
